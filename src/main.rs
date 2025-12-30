@@ -209,11 +209,18 @@ async fn main() -> Result<()> {
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press {
-                    if key.modifiers.contains(event::KeyModifiers::SHIFT) {
+                    if app.show_help {
+                         match key.code {
+                            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => app.toggle_help(),
+                            KeyCode::Char('s') | KeyCode::Char('S') if key.modifiers.contains(event::KeyModifiers::SHIFT) => app.toggle_help(),
+                            _ => {}
+                         }
+                    } else if key.modifiers.contains(event::KeyModifiers::SHIFT) {
                         match key.code {
                             KeyCode::Down => app.move_position_row(1),
                             KeyCode::Up => app.move_position_row(-1),
                             KeyCode::Left | KeyCode::Right => app.move_position_col(),
+                            KeyCode::Char('S') | KeyCode::Char('s') => app.toggle_help(),
                             _ => {}
                         }
                     } else {
@@ -225,6 +232,7 @@ async fn main() -> Result<()> {
                             KeyCode::Down => app.next_row(),
                             KeyCode::Up => app.previous_row(),
                             KeyCode::Left | KeyCode::Right => app.toggle_column(),
+                            KeyCode::Char('?') => app.toggle_help(),
                             _ => {}
                         }
                     }

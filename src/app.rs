@@ -16,6 +16,7 @@ pub struct App {
     pub positions: Vec<Position>,
     pub last_message: String,
     pub table_state: TableState,
+    pub show_help: bool,
 }
 
 impl App {
@@ -29,6 +30,7 @@ impl App {
             positions: Vec::new(),
             last_message: String::from("Ready"),
             table_state: TableState::default(),
+            show_help: false,
         }
     }
 
@@ -53,6 +55,10 @@ impl App {
             ColumnSelection::Call => ColumnSelection::Put,
             ColumnSelection::Put => ColumnSelection::Call,
         };
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
     }
 
     pub fn delete_position(&mut self) {
