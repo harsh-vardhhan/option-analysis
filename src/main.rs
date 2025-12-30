@@ -37,8 +37,8 @@ async fn main() -> Result<()> {
                 .borders(ratatui::widgets::Borders::ALL)
                 .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan));
             
-            // Center the box
-            let area = centered_rect(60, 40, size);
+            // Center the box - increased to 80/80 to prevent squashing on small terminals
+            let area = centered_rect(80, 80, size);
             
             let chunks = ratatui::layout::Layout::default()
                 .direction(ratatui::layout::Direction::Vertical)
@@ -78,9 +78,11 @@ async fn main() -> Result<()> {
             
             // Mask the token
             let masked_token: String = "*".repeat(token.len());
-            // Show only the tail if it doesn't fit
+            // Safe width calc
             let inner_width = chunks[3].width.saturating_sub(2) as usize;
-            let display_token = if masked_token.len() > inner_width {
+            let display_token = if inner_width == 0 {
+                String::new()
+            } else if masked_token.len() > inner_width {
                 // Show the last N chars
                 masked_token.chars().rev().take(inner_width).collect::<String>().chars().rev().collect()
             } else {
@@ -108,15 +110,18 @@ async fn main() -> Result<()> {
 
         let mut should_break = false;
         if event::poll(Duration::from_millis(100))? {
-            // Consume all available events to handle paste
-            loop {
-                // Check if there is an event to read
-                if !event::poll(Duration::from_millis(0))? {
-                    break;
-                }
-                
-                if let Event::Key(key) = event::read()? {
-                     if key.kind == event::KeyEventKind::Press {
+            // Read first event strictly
+            let first_event = event::read()?;
+            let mut events = vec![first_event];
+            
+            // Collect any other immediately available events (paste)
+            while event::poll(Duration::from_millis(0))? {
+                events.push(event::read()?);
+            }
+
+            for e in events {
+                if let Event::Key(key) = e {
+                    if key.kind == event::KeyEventKind::Press {
                         match key.code {
                             KeyCode::Char(c) => {
                                 token.push(c);
@@ -134,7 +139,6 @@ async fn main() -> Result<()> {
                                 }
                             },
                             KeyCode::Esc => {
-                                 // Exit gracefully
                                 disable_raw_mode()?;
                                 execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
                                 terminal.show_cursor()?;
@@ -142,11 +146,7 @@ async fn main() -> Result<()> {
                             }
                             _ => {}
                         }
-                     }
-                }
-                
-                if should_break {
-                    break;
+                    }
                 }
             }
         }
