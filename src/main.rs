@@ -18,19 +18,146 @@ use model::ApiResponse;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Get Access Token
-    print!("Enter Upstox Access Token: ");
-    io::stdout().flush()?;
-    let mut token = String::new();
-    io::stdin().read_line(&mut token)?;
-    let token = token.trim().to_string();
-
-    // 2. Setup Terminal
+    // 1. Setup Terminal Early
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+
+    // 2. Get Access Token (TUI Mode)
+    let mut token = String::new();
+    let mut error_msg = String::new();
+
+    loop {
+        terminal.draw(|f| {
+            let size = f.size();
+            let block = ratatui::widgets::Block::default()
+                .title(" Setup Trakbit ")
+                .borders(ratatui::widgets::Borders::ALL)
+                .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan));
+            
+            // Center the box
+            let area = centered_rect(60, 40, size);
+            
+            let chunks = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Vertical)
+                .constraints([
+                    ratatui::layout::Constraint::Length(4), // Welcome
+                    ratatui::layout::Constraint::Length(4), // Link
+                    ratatui::layout::Constraint::Length(4), // Steps
+                    ratatui::layout::Constraint::Length(3), // Input
+                    ratatui::layout::Constraint::Min(2),    // Error/Status
+                ])
+                .margin(2)
+                .split(area);
+
+            f.render_widget(ratatui::widgets::Clear, area); // Clear background
+            f.render_widget(block, area);
+
+            let welcome = ratatui::widgets::Paragraph::new(vec![
+                ratatui::text::Line::from(ratatui::text::Span::styled("Welcome to Trakbit!", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD).fg(ratatui::style::Color::Magenta))),
+                ratatui::text::Line::from("To get started, you need an Upstox Access Token."),
+            ]).alignment(ratatui::layout::Alignment::Center);
+
+            let link_text = vec![
+                ratatui::text::Line::from("1. Go to:"),
+                ratatui::text::Line::from(ratatui::text::Span::styled("https://account.upstox.com/developer/apps", ratatui::style::Style::default().fg(ratatui::style::Color::Blue).add_modifier(ratatui::style::Modifier::UNDERLINED))),
+            ];
+            let link = ratatui::widgets::Paragraph::new(link_text).alignment(ratatui::layout::Alignment::Center);
+
+            let steps_text = vec![
+                ratatui::text::Line::from("2. Create a new app (or use existing)"),
+                ratatui::text::Line::from("3. Copy 'Access Token' and paste below"),
+            ];
+            let steps = ratatui::widgets::Paragraph::new(steps_text).alignment(ratatui::layout::Alignment::Center);
+            
+            let input_block = ratatui::widgets::Block::default()
+                .borders(ratatui::widgets::Borders::ALL)
+                .title(" Access Token ");
+            
+            // Mask the token
+            let masked_token: String = "*".repeat(token.len());
+            // Show only the tail if it doesn't fit
+            let inner_width = chunks[3].width.saturating_sub(2) as usize;
+            let display_token = if masked_token.len() > inner_width {
+                // Show the last N chars
+                masked_token.chars().rev().take(inner_width).collect::<String>().chars().rev().collect()
+            } else {
+                masked_token
+            };
+
+            let input = ratatui::widgets::Paragraph::new(display_token)
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+                .block(input_block);
+
+            let status = ratatui::widgets::Paragraph::new(if error_msg.is_empty() { 
+                    ratatui::text::Line::from(vec![ratatui::text::Span::raw("Press "), ratatui::text::Span::styled("Enter", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD)), ratatui::text::Span::raw(" to continue")])
+                } else {
+                    ratatui::text::Line::from(ratatui::text::Span::styled(format!("Error: {}", error_msg), ratatui::style::Style::default().fg(ratatui::style::Color::Red)))
+                })
+                .alignment(ratatui::layout::Alignment::Center);
+
+            f.render_widget(welcome, chunks[0]);
+            f.render_widget(link, chunks[1]);
+            f.render_widget(steps, chunks[2]);
+            f.render_widget(input, chunks[3]);
+            f.render_widget(status, chunks[4]);
+
+        })?;
+
+        let mut should_break = false;
+        if event::poll(Duration::from_millis(100))? {
+            // Consume all available events to handle paste
+            loop {
+                // Check if there is an event to read
+                if !event::poll(Duration::from_millis(0))? {
+                    break;
+                }
+                
+                if let Event::Key(key) = event::read()? {
+                     if key.kind == event::KeyEventKind::Press {
+                        match key.code {
+                            KeyCode::Char(c) => {
+                                token.push(c);
+                                error_msg.clear();
+                            },
+                            KeyCode::Backspace => {
+                                token.pop();
+                                error_msg.clear();
+                            },
+                            KeyCode::Enter => {
+                                if token.trim().is_empty() {
+                                    error_msg = "Token cannot be empty".to_string();
+                                } else {
+                                    should_break = true;
+                                }
+                            },
+                            KeyCode::Esc => {
+                                 // Exit gracefully
+                                disable_raw_mode()?;
+                                execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+                                terminal.show_cursor()?;
+                                return Ok(());
+                            }
+                            _ => {}
+                        }
+                     }
+                }
+                
+                if should_break {
+                    break;
+                }
+            }
+        }
+        
+        if should_break {
+            break;
+        }
+    }
+
+
+    let token = token.trim().to_string();
 
     // 3. Setup App and Data Channel
     let mut app = App::new();
@@ -40,6 +167,7 @@ async fn main() -> Result<()> {
     let token_clone = token.clone();
     tokio::spawn(async move {
         let client = reqwest::Client::new();
+        // Assuming user wants NIFTY 50 for now, could also be configurable later
         let url = "https://api.upstox.com/v2/option/chain?instrument_key=NSE_INDEX%7CNifty%2050&expiry_date=2026-01-06";
         
         loop {
@@ -60,7 +188,6 @@ async fn main() -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    // Send empty or log error? For now just ignore valid fetch errors to retry
                      eprintln!("Error fetching data: {}", e);
                 }
             }
@@ -101,9 +228,9 @@ async fn main() -> Result<()> {
                             _ => {}
                         }
                     }
+                }
             }
         }
-    }
 
         if last_tick.elapsed() >= tick_rate {
             app.on_tick();
@@ -114,7 +241,7 @@ async fn main() -> Result<()> {
         if let Ok(new_data) = rx.try_recv() {
             app.data = new_data;
             app.update_live_prices();
-            
+                        
             // Auto-center on ATM if first load
             if !app.initial_centering_done && !app.data.is_empty() {
                 let spot_price = app.data.first().map(|d| d.underlying_spot_price).unwrap_or(0.0);
@@ -151,4 +278,24 @@ async fn main() -> Result<()> {
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let popup_layout = ratatui::layout::Layout::default()
+        .direction(ratatui::layout::Direction::Vertical)
+        .constraints([
+            ratatui::layout::Constraint::Percentage((100 - percent_y) / 2),
+            ratatui::layout::Constraint::Percentage(percent_y),
+            ratatui::layout::Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    ratatui::layout::Layout::default()
+        .direction(ratatui::layout::Direction::Horizontal)
+        .constraints([
+            ratatui::layout::Constraint::Percentage((100 - percent_x) / 2),
+            ratatui::layout::Constraint::Percentage(percent_x),
+            ratatui::layout::Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
