@@ -61,8 +61,24 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
     }
 
     // Graph Range (for visualization)
-    let lower_bound = current_spot * 0.85;
-    let upper_bound = current_spot * 1.15;
+    // Graph Range (for visualization)
+    let (lower_bound, upper_bound) = if positions.is_empty() {
+        (current_spot * 0.95, current_spot * 1.05)
+    } else {
+        let strikes: Vec<f64> = positions.iter().map(|p| p.strike).collect();
+        let min_strike = strikes.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_strike = strikes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        
+        // Ensure Spot is included
+        let low_anchor = min_strike.min(current_spot);
+        let high_anchor = max_strike.max(current_spot);
+        
+        let diff = high_anchor - low_anchor;
+        // Margin: 50% of the active range, or 2% of spot if range is tiny
+        let margin = if diff < 1.0 { current_spot * 0.02 } else { diff * 0.5 };
+        
+        (low_anchor - margin, high_anchor + margin)
+    };
     let steps = 100;
     let step_size = (upper_bound - lower_bound) / steps as f64;
 
