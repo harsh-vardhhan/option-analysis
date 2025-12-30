@@ -30,12 +30,13 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     let dashboard_text = vec![
         Line::from(vec![
-            Span::raw("Symbol: "),
-            Span::styled(underlying, Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow)),
-            Span::raw("  |  Spot Price: "),
-            Span::styled(format!("{:.2}", spot_price), Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan)),
-            Span::raw("  |  Expiry: "),
-            Span::styled(expiry, Style::default().fg(Color::Magenta)),
+            Span::styled(format!(" {} ", underlying), Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+            Span::styled(format!(" ₹{:.2} ", spot_price), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("  Expiry: "),
+            Span::styled(expiry, Style::default().fg(Color::Yellow)),
+            Span::raw("  |  Last Action: "),
+            Span::styled(format!(" {} ", app.last_message), Style::default().bg(Color::DarkGray).fg(Color::White)),
         ]),
         Line::from(vec![
              Span::styled("LIVE MARKET DATA", Style::default().fg(Color::Green).add_modifier(Modifier::RAPID_BLINK)), // subtle blinking
@@ -137,13 +138,13 @@ pub fn draw(f: &mut Frame, app: &App) {
             .map(|p| p.qty).unwrap_or(0);
 
         let call_text = if call_qty != 0 {
-            format!("[{:+}] {:.2}", call_qty, call_ltp)
+            format!("[{:+} CE] {:.2}", call_qty, call_ltp)
         } else {
             format!("{:.2}", call_ltp)
         };
 
         let put_text = if put_qty != 0 {
-            format!("{:.2} [{:+}]", put_ltp, put_qty)
+            format!("{:.2} [{:+} PE]", put_ltp, put_qty)
         } else {
             format!("{:.2}", put_ltp)
         };

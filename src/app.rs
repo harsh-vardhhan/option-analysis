@@ -12,11 +12,8 @@ pub struct App {
     pub selected_column: ColumnSelection,
     pub should_quit: bool,
     pub initial_centering_done: bool,
-    // Key: (Strike, OptionType) -> Position
-    // Actually we need to support multiple legs, but usually one leg per strike/type is enough for builders.
-    // We'll use a Vec for simplicity in rendering linear list, but Map for fast lookup?
-    // Let's use a Vec and simple linear scan for small N.
     pub positions: Vec<Position>,
+    pub last_message: String,
 }
 
 impl App {
@@ -28,6 +25,7 @@ impl App {
             should_quit: false,
             initial_centering_done: false,
             positions: Vec::new(),
+            last_message: String::from("Ready"),
         }
     }
 
@@ -77,39 +75,19 @@ impl App {
             ColumnSelection::Put => (OptionType::Put, item.put_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0)),
         };
 
-        // Find existing position
         if let Some(pos) = self.positions.iter_mut().find(|p| p.strike == strike && p.kind == kind) {
-            // Flip logic: 
-            // If Buy requested:
-            //    If current Qty < 0 (Short), removing shorts -> Incr Qty
-            //    If current Qty > 0 (Long), adding longs -> Incr Qty
-            // Wait, usually "Buy" button just adds +1 qty, "Sell" adds -1 qty.
-            // User requirement: "if I presse S on a strike which has B's, it should remove all Bs and start calculating for S"
-            
+            // Flip logic or increment
             if is_buy {
                 if pos.qty < 0 {
-                     // Was Short, switch to Long +1 immediately? Or unwind?
-                     // "Remove all Bs" implies clearing opposing.
-                     // "start calculating for S" implies switching direction.
-                     
-                     // Strict Interpretation:
-                     // If I have Sell (-N), and press Buy:
-                     // Reset to Buy (+1).
                      pos.qty = 1;
-                     pos.entry_price = price; // Update price to current
+                     pos.entry_price = price;
                 } else {
                     pos.qty += 1;
-                    // Avg price logic? Simplified: keep latest or average?
-                    // Strategy Builders usually simulate "Current Market Entry". So updating price is fine, or avg.
-                    // Let's weighted average for realism if adding to same side.
-                    // new_price = (old_total + new_price) / new_qty
                     let old_total = pos.entry_price * (pos.qty - 1) as f64;
                     pos.entry_price = (old_total + price) / pos.qty as f64;
                 }
             } else {
-                // Sell requested
                 if pos.qty > 0 {
-                    // Was Long, switch to Short -1
                     pos.qty = -1;
                     pos.entry_price = price;
                 } else {
@@ -131,5 +109,14 @@ impl App {
         
         // Cleanup: Remove 0 qty?
         self.positions.retain(|p| p.qty != 0);
+
+        // Update Message
+        let side = if is_buy { "BUY" } else { "SELL" };
+        let k_str = match kind {
+            OptionType::Call => "CE",
+            OptionType::Put => "PE",
+        };
+        self.last_message = format!("{} {} {} @ {:.2}", side, k_str, strike, price);
     }
 }
+

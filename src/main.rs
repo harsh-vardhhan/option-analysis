@@ -81,7 +81,8 @@ async fn main() -> Result<()> {
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
+                if key.kind == event::KeyEventKind::Press {
+                    match key.code {
                     KeyCode::Char('q') => app.should_quit = true,
                     KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
                     KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
@@ -93,6 +94,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
+    }
 
         if last_tick.elapsed() >= tick_rate {
             app.on_tick();
