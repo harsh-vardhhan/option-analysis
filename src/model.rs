@@ -26,6 +26,8 @@ pub struct OptionContract {
 #[derive(Debug, Deserialize, Clone)]
 pub struct MarketData {
     pub ltp: f64,
+    #[serde(default)]
+    pub oi: f64,
 }
 
 #[cfg(test)]

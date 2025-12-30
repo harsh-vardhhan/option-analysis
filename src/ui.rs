@@ -66,17 +66,50 @@ pub fn draw(f: &mut Frame, app: &App) {
         })
         .map(|(i, _)| i);
 
+    // Calculate Max OI for scaling
+    let max_oi = app.data.iter().fold(0.0f64, |acc, item| {
+        let call_oi = item.call_options.as_ref().map(|o| o.market_data.oi).unwrap_or(0.0);
+        let put_oi = item.put_options.as_ref().map(|o| o.market_data.oi).unwrap_or(0.0);
+        acc.max(call_oi).max(put_oi)
+    });
+    
+    // Bar drawing helper
+    let draw_bar = |val: f64, max: f64, color: Color, grow_left: bool| -> Line {
+        if max == 0.0 { return Line::from("        "); }
+        let width = 8; // Compact fixed width
+        let ratio = (val / max).min(1.0);
+        let filled = (ratio * width as f64).round() as usize;
+        let empty = width - filled;
+        
+        let bar_char = "▆"; 
+        let bar_str = bar_char.repeat(filled);
+        let empty_str = " ".repeat(empty);
+        
+        let spans = if grow_left {
+             // Grow Left <- (e.g. "   |||")
+             vec![
+                 Span::raw(empty_str),
+                 Span::styled(bar_str, Style::default().fg(color)),
+             ]
+        } else {
+             // Grow Right -> (e.g. "|||   ")
+             vec![
+                 Span::styled(bar_str, Style::default().fg(color)),
+                 Span::raw(empty_str),
+             ]
+        };
+        
+        Line::from(spans)
+    };
+
     let rows = app.data.iter().enumerate().map(|(i, item)| {
         let call_ltp = item.call_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0);
         let put_ltp = item.put_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0);
+        let call_oi = item.call_options.as_ref().map(|o| o.market_data.oi).unwrap_or(0.0);
+        let put_oi = item.put_options.as_ref().map(|o| o.market_data.oi).unwrap_or(0.0);
 
-        // Base styles for ITM/OTM
-        // Professional Theme:
-        // OTM: Default/Grayish
-        // ITM Call: Subtle Green Background
-        // ITM Put: Subtle Red Background
-        
-        // Define colors
+        // ... (Styles)
+        // Re-declaring styles locally since this is a clean replacement block
         let itm_call_bg = Color::Rgb(15, 40, 15);
         let itm_put_bg = Color::Rgb(40, 15, 15);
         let text_color = Color::White;
@@ -84,93 +117,68 @@ pub fn draw(f: &mut Frame, app: &App) {
 
         let mut call_style = Style::default().fg(text_color);
         let mut put_style = Style::default().fg(text_color);
-        let mut strike_style = Style::default().fg(Color::Yellow); // Strikes usually distinct
+        let mut strike_style = Style::default().fg(Color::Yellow);
 
-        // ITM Logic
-        if item.strike_price < spot_price {
-            // Call ITM
-            call_style = call_style.bg(itm_call_bg);
-        } else {
-            // Call OTM
-            call_style = call_style.fg(dim_text_color);
-        }
+        let is_call_itm = item.strike_price < spot_price;
+        let is_put_itm = item.strike_price > spot_price;
 
-        if item.strike_price > spot_price {
-            // Put ITM
-            put_style = put_style.bg(itm_put_bg);
-        } else {
-            // Put OTM
-            put_style = put_style.fg(dim_text_color);
-        }
+        if is_call_itm { call_style = call_style.bg(itm_call_bg); } else { call_style = call_style.fg(dim_text_color); }
+        if is_put_itm { put_style = put_style.bg(itm_put_bg); } else { put_style = put_style.fg(dim_text_color); }
 
-        // ATM Logic
         if Some(i) == closest_strike_index {
              strike_style = strike_style.bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD);
         }
 
-        // Selection Highlight
-        // High Contrast for selected row
         if i == app.selected_row {
             let sel_bg = Color::White;
             let sel_fg = Color::Black;
-
             match app.selected_column {
-                ColumnSelection::Call => {
-                    call_style = call_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD);
-                }
-                ColumnSelection::Put => {
-                    put_style = put_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD);
-                }
+                ColumnSelection::Call => { call_style = call_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
+                ColumnSelection::Put => { put_style = put_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
             }
-            // Add a subtle highlight to the non-selected column in the same row to track the eye
             if strike_style.bg != Some(Color::Blue) {
                strike_style = strike_style.bg(Color::DarkGray);
             }
         }
 
-        // Check for position on this strike/type
-        let call_qty = app.positions.iter()
-            .find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call)
-            .map(|p| p.qty).unwrap_or(0);
-        
-        let put_qty = app.positions.iter()
-            .find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put)
-            .map(|p| p.qty).unwrap_or(0);
+        let call_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
+        let put_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
 
-        let call_text = if call_qty != 0 {
-            format!("[{:+} CE] {:.2}", call_qty, call_ltp)
-        } else {
-            format!("{:.2}", call_ltp)
-        };
+        let call_text = if call_qty != 0 { format!("[{:+} CE] {:.2}", call_qty, call_ltp) } else { format!("{:.2}", call_ltp) };
+        let put_text = if put_qty != 0 { format!("{:.2} [{:+} PE]", put_ltp, put_qty) } else { format!("{:.2}", put_ltp) };
 
-        let put_text = if put_qty != 0 {
-            format!("{:.2} [{:+} PE]", put_ltp, put_qty)
-        } else {
-            format!("{:.2}", put_ltp)
-        };
-
+        // Point Inwards:
+        // Left Column (Call OI): Grow Right -> (grow_left = false)
+        // Right Column (Put OI): Grow Left <- (grow_left = true)
         Row::new(vec![
+            Cell::from(draw_bar(call_oi, max_oi, Color::Green, false).alignment(Alignment::Left)).style(call_style),
             Cell::from(Line::from(call_text).alignment(Alignment::Right)).style(call_style),
             Cell::from(Line::from(format!("{:.0}", item.strike_price)).alignment(Alignment::Center)).style(strike_style),
             Cell::from(Line::from(put_text).alignment(Alignment::Left)).style(put_style),
+            Cell::from(draw_bar(put_oi, max_oi, Color::Red, true).alignment(Alignment::Right)).style(put_style),
         ])
     });
 
     let table = Table::new(rows, [
-        Constraint::Percentage(40),
-        Constraint::Length(15), // Center column fixed width
-        Constraint::Percentage(40),
+        Constraint::Min(10),        // Call OI: Flexible, at least 10
+        Constraint::Length(20),     // Call LTP: Fixed reasonable width
+        Constraint::Length(12),     // Strike: Fixed
+        Constraint::Length(20),     // Put LTP: Fixed
+        Constraint::Min(10),        // Put OI: Flexible
     ])
     .header(
         Row::new(vec![
+            Cell::from(Line::from("OI").alignment(Alignment::Left)).style(Style::default().fg(Color::Green)),
             Cell::from(Line::from("CALLS").alignment(Alignment::Right)).style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("STRIKE").alignment(Alignment::Center)).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("PUTS").alignment(Alignment::Left)).style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Cell::from(Line::from("OI").alignment(Alignment::Right)).style(Style::default().fg(Color::Red)),
         ])
         .bottom_margin(1)
         .height(1)
     )
-    .column_spacing(2);
+    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)).title(" Option Chain "))
+    .column_spacing(1);
 
     let mut table_state = TableState::default();
     table_state.select(Some(app.selected_row));
