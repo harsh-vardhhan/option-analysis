@@ -82,16 +82,25 @@ async fn main() -> Result<()> {
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press {
-                    match key.code {
-                    KeyCode::Char('q') => app.should_quit = true,
-                    KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
-                    KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
-                    KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
-                    KeyCode::Down => app.next_row(),
-                    KeyCode::Up => app.previous_row(),
-                    KeyCode::Left | KeyCode::Right => app.toggle_column(),
-                    _ => {}
-                }
+                    if key.modifiers.contains(event::KeyModifiers::SHIFT) {
+                        match key.code {
+                            KeyCode::Down => app.move_position_row(1),
+                            KeyCode::Up => app.move_position_row(-1),
+                            KeyCode::Left | KeyCode::Right => app.move_position_col(),
+                            _ => {}
+                        }
+                    } else {
+                        match key.code {
+                            KeyCode::Char('q') => app.should_quit = true,
+                            KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
+                            KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
+                            KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
+                            KeyCode::Down => app.next_row(),
+                            KeyCode::Up => app.previous_row(),
+                            KeyCode::Left | KeyCode::Right => app.toggle_column(),
+                            _ => {}
+                        }
+                    }
             }
         }
     }
