@@ -228,16 +228,25 @@ pub fn draw(f: &mut Frame, app: &App) {
             // text.push(Line::from(""));
             text.push(Line::from(Span::styled("Analysis:", Style::default().add_modifier(Modifier::UNDERLINED))));
             
-            let max_profit_s = format!("{:.0}", stats.max_profit);
-            let max_loss_s = format!("{:.0}", stats.max_loss);
+            let max_profit_s = if stats.max_profit_unlimited {
+                 Span::styled("Unlimited", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+            } else {
+                 Span::styled(format!("{:.0}", stats.max_profit), Style::default().fg(Color::Green))
+            };
+
+            let max_loss_s = if stats.max_loss_unlimited {
+                 Span::styled("Unlimited", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+            } else {
+                 Span::styled(format!("{:.0}", stats.max_loss), Style::default().fg(Color::Red))
+            };
 
             text.push(Line::from(vec![
-                    Span::raw("Max Profit: "),
-                    Span::styled(max_profit_s, Style::default().fg(Color::Green)),
+                 Span::raw("Max Profit: "),
+                 max_profit_s,
             ]));
             text.push(Line::from(vec![
-                    Span::raw("Max Loss:   "),
-                    Span::styled(max_loss_s, Style::default().fg(Color::Red)),
+                 Span::raw("Max Loss:   "),
+                 max_loss_s,
             ]));
 
             if !stats.breakevens.is_empty() {

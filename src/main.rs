@@ -104,6 +104,7 @@ async fn main() -> Result<()> {
         // Check for new data
         if let Ok(new_data) = rx.try_recv() {
             app.data = new_data;
+            app.update_live_prices();
             
             // Auto-center on ATM if first load
             if !app.initial_centering_done && !app.data.is_empty() {

@@ -65,6 +65,24 @@ impl App {
         self.positions.retain(|p| !(p.strike == strike && p.kind == kind));
     }
 
+    pub fn update_live_prices(&mut self) {
+        if self.data.is_empty() { return; }
+
+        for pos in &mut self.positions {
+            // Find current market price for this position
+            if let Some(market_row) = self.data.iter().find(|d| (d.strike_price - pos.strike).abs() < 0.1) {
+                let current_ltp = match pos.kind {
+                    crate::strategy::OptionType::Call => market_row.call_options.as_ref().map(|o| o.market_data.ltp),
+                    crate::strategy::OptionType::Put => market_row.put_options.as_ref().map(|o| o.market_data.ltp),
+                };
+
+                if let Some(price) = current_ltp {
+                    pos.entry_price = price;
+                }
+            }
+        }
+    }
+
     pub fn handle_trade_action(&mut self, is_buy: bool) {
         if self.data.is_empty() { return; }
         
