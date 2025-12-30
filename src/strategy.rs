@@ -19,6 +19,7 @@ pub struct StrategyStats {
     pub max_profit: f64,
     pub max_loss: f64,
     pub breakevens: Vec<f64>,
+    pub points: Vec<(f64, f64)>,
 }
 
 impl Position {
@@ -57,15 +58,19 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
         return StrategyStats::default();
     }
 
-    // Scan range: +/- 20% of spot
-    let lower_bound = current_spot * 0.8;
-    let upper_bound = current_spot * 1.2;
-    let steps = 200;
+    // Scan range: +/- 10% of spot (Usually enough for graph)
+    // Actually strategy builder graphs usually center on the action. 
+    // If straddle at 20000, spot 22000, we want to see 20000.
+    // Let's use simple heuristic: +/- 15% of spot for now.
+    let lower_bound = current_spot * 0.85;
+    let upper_bound = current_spot * 1.15;
+    let steps = 100;
     let step_size = (upper_bound - lower_bound) / steps as f64;
 
     let mut max_profit = f64::NEG_INFINITY;
     let mut max_loss = f64::INFINITY; // Loss is negative profit, so we store min_pnl
     let mut breakevens = Vec::new();
+    let mut points = Vec::new();
 
     let mut prev_pnl = calculate_net_payoff(positions, lower_bound);
     
@@ -79,9 +84,19 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
 
         // Breakeven crossing
         if (prev_pnl < 0.0 && pnl >= 0.0) || (prev_pnl > 0.0 && pnl <= 0.0) {
-            // Linear interpolation for more precision? simplified is fine.
-            breakevens.push(spot);
+            // Linear interpolation using y = mx + c logic for better precision on BE point
+            // spot = x, pnl = y. y0 at x0 (prev_spot), y1 at x1 (spot)
+            // x_zero = x0 + (0 - y0) * (x1 - x0) / (y1 - y0)
+            let prev_spot = spot - step_size;
+            if (pnl - prev_pnl).abs() > 1e-6 {
+                let zero_spot = prev_spot + (0.0 - prev_pnl) * (spot - prev_spot) / (pnl - prev_pnl);
+                breakevens.push(zero_spot);
+            } else {
+                breakevens.push(spot);
+            }
         }
+        
+        points.push((spot, pnl));
         prev_pnl = pnl;
     }
 
@@ -94,5 +109,6 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
         max_profit,
         max_loss,
         breakevens,
+        points,
     }
 }

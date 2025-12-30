@@ -1,8 +1,9 @@
 use ratatui::{
-    layout::{Constraint, Layout, Alignment},
+    layout::{Constraint, Layout, Alignment, Direction},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Chart, Axis, Dataset, GraphType},
+    symbols,
     Frame,
 };
 
@@ -12,7 +13,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     let constraints = if app.positions.is_empty() {
         vec![Constraint::Length(4), Constraint::Min(0)]
     } else {
-        vec![Constraint::Length(4), Constraint::Min(0), Constraint::Length(10)]
+        vec![Constraint::Length(4), Constraint::Min(0), Constraint::Length(15)]
     };
 
     let chunks = Layout::default()
@@ -177,65 +178,101 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // --- STRATEGY PANEL ---
     if !app.positions.is_empty() {
-        // Calculate Stats
-        use crate::strategy::analyze_strategy;
-        let stats = analyze_strategy(&app.positions, spot_price);
-
-        let mut text = vec![
-            Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
-            Line::from(""),
-        ];
-
-        // List Legs
-        text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
-        for pos in &app.positions {
-            let side = if pos.qty > 0 { "BUY" } else { "SELL" };
-            let color = if pos.qty > 0 { Color::Green } else { Color::Red };
-            let kind = match pos.kind {
-                 crate::strategy::OptionType::Call => "CE",
-                 crate::strategy::OptionType::Put => "PE",
-            };
-            text.push(Line::from(vec![
-                Span::styled(format!(" {:<4} ", side), Style::default().bg(color).fg(Color::Black)),
-                Span::raw(format!(" {} {} @ {:.2}", pos.qty.abs(), kind, pos.entry_price)),
-                Span::styled(format!("  Strike: {:.0}", pos.strike), Style::default().fg(Color::Yellow)),
-            ]));
-        }
-        
-        text.push(Line::from(""));
-        text.push(Line::from(Span::styled("Analysis (Expiry):", Style::default().add_modifier(Modifier::UNDERLINED))));
-        
-        let max_profit_s = if stats.max_profit > 1_000_000.0 { "Unlimited".to_string() } else { format!("{:.2}", stats.max_profit) };
-        let max_loss_s = if stats.max_loss < -1_000_000.0 { "Unlimited".to_string() } else { format!("{:.2}", stats.max_loss) };
-
-        text.push(Line::from(vec![
-             Span::raw("Max Profit: "),
-             Span::styled(max_profit_s, Style::default().fg(Color::Green)),
-             Span::raw("  |  Max Loss: "),
-             Span::styled(max_loss_s, Style::default().fg(Color::Red)),
-        ]));
-
-        if !stats.breakevens.is_empty() {
-             let be_str: Vec<String> = stats.breakevens.iter().map(|b| format!("{:.0}", b)).collect();
-             text.push(Line::from(format!("Breakevens: {}", be_str.join(", "))));
-        }
-
-        let block = Block::default().borders(Borders::TOP).title(" Strategy ");
-        let paragraph = Paragraph::new(text).block(block);
-        
-        // We need a chunk for this. 
-        // NOTE: The layout defined earlier splits into 0: Header(4), 1: Min(0).
-        // We can't easily append to chunks[1] without resizing. 
-        // Ideally we should have defined a 3-chunk layout if strategy is active, or overlay.
-        // Let's render this as a Popup or just Overlay at the bottom?
-        // Better: Modify the Layout at the top of the function to be dynamic. 
-        // But `draw` takes `f`, and we already used `chunks`.
-        // Hack: Render a Clear widget then this paragraph on top of the bottom area? 
-        // No, let's just assume we can reserve the bottom 20% area. 
-        // Actually, we can define a new rect.
-        
         if chunks.len() > 2 {
-             f.render_widget(paragraph, chunks[2]);
+             // Split the bottom chunk into Left (Stats) and Right (Graph)
+             let strategy_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+                .split(chunks[2]);
+
+            // Calculate Stats
+            use crate::strategy::analyze_strategy;
+            let stats = analyze_strategy(&app.positions, spot_price);
+
+            let mut text = vec![
+                Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
+                Line::from(""),
+            ];
+
+            // List Legs (Compact)
+            text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
+            for pos in &app.positions {
+                let side = if pos.qty > 0 { "BUY" } else { "SELL" };
+                let color = if pos.qty > 0 { Color::Green } else { Color::Red };
+                let kind = match pos.kind {
+                     crate::strategy::OptionType::Call => "CE",
+                     crate::strategy::OptionType::Put => "PE",
+                };
+                text.push(Line::from(vec![
+                    Span::styled(format!(" {:<4} ", side), Style::default().bg(color).fg(Color::Black)),
+                    Span::raw(format!(" {} {} @ {:.1}", pos.qty.abs(), kind, pos.entry_price)),
+                    Span::styled(format!("  Str: {:.0}", pos.strike), Style::default().fg(Color::Yellow)),
+                ]));
+            }
+            
+            // text.push(Line::from(""));
+            text.push(Line::from(Span::styled("Analysis:", Style::default().add_modifier(Modifier::UNDERLINED))));
+            
+            let max_profit_s = format!("{:.0}", stats.max_profit);
+            let max_loss_s = format!("{:.0}", stats.max_loss);
+
+            text.push(Line::from(vec![
+                 Span::raw("Max Profit: "),
+                 Span::styled(max_profit_s, Style::default().fg(Color::Green)),
+            ]));
+            text.push(Line::from(vec![
+                 Span::raw("Max Loss:   "),
+                 Span::styled(max_loss_s, Style::default().fg(Color::Red)),
+            ]));
+
+            if !stats.breakevens.is_empty() {
+                 let be_str: Vec<String> = stats.breakevens.iter().map(|b| format!("{:.0}", b)).collect();
+                 text.push(Line::from(vec![
+                     Span::raw("Breakeven:  "),
+                     Span::styled(be_str.join(", "), Style::default().fg(Color::Cyan)),
+                 ]));
+            }
+
+            let block = Block::default().borders(Borders::ALL).title(" Analysis ");
+            let paragraph = Paragraph::new(text).block(block);
+            f.render_widget(paragraph, strategy_chunks[0]);
+
+            // --- GRAPH ---
+            let x_labels = vec![
+                Span::styled(format!("{:.0}", stats.points.first().map(|p| p.0).unwrap_or(0.0)), Style::default().fg(Color::Gray)),
+                Span::styled(format!("{:.0}", stats.points.last().map(|p| p.0).unwrap_or(0.0)), Style::default().fg(Color::Gray)),
+            ];
+            
+            let y_min = stats.max_loss.min(0.0) * 1.1; // margin
+            let y_max = stats.max_profit.max(0.0) * 1.1;
+            
+            let datasets = vec![
+                Dataset::default()
+                    .name("P&L")
+                    .marker(symbols::Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .style(Style::default().fg(Color::Yellow))
+                    .data(&stats.points),
+            ];
+            
+            let chart = Chart::new(datasets)
+                .block(Block::default().title(" Payoff Graph ").borders(Borders::ALL))
+                .x_axis(Axis::default()
+                    .title("Spot Price")
+                    .style(Style::default().fg(Color::Gray))
+                    .bounds([stats.points.first().map(|p| p.0).unwrap_or(0.0), stats.points.last().map(|p| p.0).unwrap_or(100.0)])
+                    .labels(x_labels))
+                .y_axis(Axis::default()
+                    .title("P&L")
+                    .style(Style::default().fg(Color::Gray))
+                    .bounds([y_min, y_max])
+                    .labels(vec![
+                        Span::styled(format!("{:.0}", y_min), Style::default().fg(Color::Gray)),
+                        Span::styled("0", Style::default().fg(Color::Gray)),
+                        Span::styled(format!("{:.0}", y_max), Style::default().fg(Color::Gray)),
+                    ]));
+            
+            f.render_widget(chart, strategy_chunks[1]);
         }
     }
 }
