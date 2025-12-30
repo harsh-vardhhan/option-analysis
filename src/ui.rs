@@ -144,17 +144,47 @@ pub fn draw(f: &mut Frame, app: &App) {
         let call_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
         let put_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
 
-        let call_text = if call_qty != 0 { format!("[{:+} CE] {:.2}", call_qty, call_ltp) } else { format!("{:.2}", call_ltp) };
-        let put_text = if put_qty != 0 { format!("{:.2} [{:+} PE]", put_ltp, put_qty) } else { format!("{:.2}", put_ltp) };
+        // Helper to create badge spans
+        let create_badge = |qty: i32| -> Span {
+            let is_buy = qty > 0;
+            let label = if is_buy { "BUY" } else { "SELL" };
+            let sign = if is_buy { "+" } else { "-" };
+            let color = if is_buy { Color::Green } else { Color::Red };
+            
+            Span::styled(
+                format!(" {}{} {} ", sign, qty.abs(), label), 
+                Style::default().bg(color).fg(Color::Black).add_modifier(Modifier::BOLD)
+            )
+        };
+
+        let call_content = if call_qty != 0 {
+            vec![
+                create_badge(call_qty),
+                Span::raw(" "),
+                Span::raw(format!("{:.2}", call_ltp))
+            ]
+        } else {
+            vec![Span::raw(format!("{:.2}", call_ltp))]
+        };
+
+        let put_content = if put_qty != 0 {
+            vec![
+                Span::raw(format!("{:.2}", put_ltp)),
+                Span::raw(" "),
+                create_badge(put_qty)
+            ]
+        } else {
+            vec![Span::raw(format!("{:.2}", put_ltp))]
+        };
 
         // Point Inwards:
         // Left Column (Call OI): Grow Right -> (grow_left = false)
         // Right Column (Put OI): Grow Left <- (grow_left = true)
         Row::new(vec![
             Cell::from(draw_bar(call_oi, max_oi, Color::Green, false).alignment(Alignment::Left)).style(call_style),
-            Cell::from(Line::from(call_text).alignment(Alignment::Right)).style(call_style),
+            Cell::from(Line::from(call_content).alignment(Alignment::Right)).style(call_style),
             Cell::from(Line::from(format!("{:.0}", item.strike_price)).alignment(Alignment::Center)).style(strike_style),
-            Cell::from(Line::from(put_text).alignment(Alignment::Left)).style(put_style),
+            Cell::from(Line::from(put_content).alignment(Alignment::Left)).style(put_style),
             Cell::from(draw_bar(put_oi, max_oi, Color::Red, true).alignment(Alignment::Right)).style(put_style),
         ])
     });
