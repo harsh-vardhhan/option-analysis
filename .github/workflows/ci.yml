@@ -40,11 +40,11 @@ jobs:
 
     - name: Rename binary (Unix)
       if: runner.os != 'Windows'
-      run: mv target/release/option-analysis target/release/trakbit
+      run: mv -f target/release/option-analysis target/release/trakbit
 
     - name: Rename binary (Windows)
       if: runner.os == 'Windows'
-      run: mv target/release/option-analysis.exe target/release/trakbit.exe
+      run: mv -Force target/release/option-analysis.exe target/release/trakbit.exe
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
