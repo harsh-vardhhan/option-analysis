@@ -1,5 +1,6 @@
 use crate::model::OptionData;
 use crate::strategy::{Position, OptionType};
+use ratatui::widgets::TableState;
 
 pub enum ColumnSelection {
     Call,
@@ -14,6 +15,7 @@ pub struct App {
     pub initial_centering_done: bool,
     pub positions: Vec<Position>,
     pub last_message: String,
+    pub table_state: TableState,
 }
 
 impl App {
@@ -26,6 +28,7 @@ impl App {
             initial_centering_done: false,
             positions: Vec::new(),
             last_message: String::from("Ready"),
+            table_state: TableState::default(),
         }
     }
 

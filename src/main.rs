@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
     let mut last_tick = std::time::Instant::now();
 
     loop {
-        terminal.draw(|f| ui::draw(f, &app))?;
+        terminal.draw(|f| ui::draw(f, &mut app))?;
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())

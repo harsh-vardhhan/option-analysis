@@ -2,14 +2,14 @@ use ratatui::{
     layout::{Constraint, Layout, Alignment, Direction},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Chart, Axis, Dataset, GraphType},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Chart, Axis, Dataset, GraphType},
     symbols,
     Frame,
 };
 
 use crate::app::{App, ColumnSelection};
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let constraints = vec![
         Constraint::Length(4), 
         Constraint::Min(0), 
@@ -210,10 +210,10 @@ pub fn draw(f: &mut Frame, app: &App) {
     .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)).title(" Option Chain "))
     .column_spacing(1);
 
-    let mut table_state = TableState::default();
-    table_state.select(Some(app.selected_row));
+    // Sync selection state with persisted TableState
+    app.table_state.select(Some(app.selected_row));
 
-    f.render_stateful_widget(table, chunks[1], &mut table_state);
+    f.render_stateful_widget(table, chunks[1], &mut app.table_state);
 
     // --- STRATEGY PANEL ---
     // --- STRATEGY PANEL ---
