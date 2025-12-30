@@ -9,8 +9,14 @@ use ratatui::{
 use crate::app::{App, ColumnSelection};
 
 pub fn draw(f: &mut Frame, app: &App) {
+    let constraints = if app.positions.is_empty() {
+        vec![Constraint::Length(4), Constraint::Min(0)]
+    } else {
+        vec![Constraint::Length(4), Constraint::Min(0), Constraint::Length(10)]
+    };
+
     let chunks = Layout::default()
-        .constraints([Constraint::Length(4), Constraint::Min(0)])
+        .constraints(constraints)
         .split(f.size());
 
     // --- DASHBOARD ---
@@ -120,10 +126,31 @@ pub fn draw(f: &mut Frame, app: &App) {
             }
         }
 
+        // Check for position on this strike/type
+        let call_qty = app.positions.iter()
+            .find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call)
+            .map(|p| p.qty).unwrap_or(0);
+        
+        let put_qty = app.positions.iter()
+            .find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put)
+            .map(|p| p.qty).unwrap_or(0);
+
+        let call_text = if call_qty != 0 {
+            format!("[{:+}] {:.2}", call_qty, call_ltp)
+        } else {
+            format!("{:.2}", call_ltp)
+        };
+
+        let put_text = if put_qty != 0 {
+            format!("{:.2} [{:+}]", put_ltp, put_qty)
+        } else {
+            format!("{:.2}", put_ltp)
+        };
+
         Row::new(vec![
-            Cell::from(Line::from(format!("{:.2}", call_ltp)).alignment(Alignment::Right)).style(call_style),
+            Cell::from(Line::from(call_text).alignment(Alignment::Right)).style(call_style),
             Cell::from(Line::from(format!("{:.0}", item.strike_price)).alignment(Alignment::Center)).style(strike_style),
-            Cell::from(Line::from(format!("{:.2}", put_ltp)).alignment(Alignment::Left)).style(put_style),
+            Cell::from(Line::from(put_text).alignment(Alignment::Left)).style(put_style),
         ])
     });
 
@@ -147,4 +174,68 @@ pub fn draw(f: &mut Frame, app: &App) {
     table_state.select(Some(app.selected_row));
 
     f.render_stateful_widget(table, chunks[1], &mut table_state);
+
+    // --- STRATEGY PANEL ---
+    if !app.positions.is_empty() {
+        // Calculate Stats
+        use crate::strategy::analyze_strategy;
+        let stats = analyze_strategy(&app.positions, spot_price);
+
+        let mut text = vec![
+            Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
+            Line::from(""),
+        ];
+
+        // List Legs
+        text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
+        for pos in &app.positions {
+            let side = if pos.qty > 0 { "BUY" } else { "SELL" };
+            let color = if pos.qty > 0 { Color::Green } else { Color::Red };
+            let kind = match pos.kind {
+                 crate::strategy::OptionType::Call => "CE",
+                 crate::strategy::OptionType::Put => "PE",
+            };
+            text.push(Line::from(vec![
+                Span::styled(format!(" {:<4} ", side), Style::default().bg(color).fg(Color::Black)),
+                Span::raw(format!(" {} {} @ {:.2}", pos.qty.abs(), kind, pos.entry_price)),
+                Span::styled(format!("  Strike: {:.0}", pos.strike), Style::default().fg(Color::Yellow)),
+            ]));
+        }
+        
+        text.push(Line::from(""));
+        text.push(Line::from(Span::styled("Analysis (Expiry):", Style::default().add_modifier(Modifier::UNDERLINED))));
+        
+        let max_profit_s = if stats.max_profit > 1_000_000.0 { "Unlimited".to_string() } else { format!("{:.2}", stats.max_profit) };
+        let max_loss_s = if stats.max_loss < -1_000_000.0 { "Unlimited".to_string() } else { format!("{:.2}", stats.max_loss) };
+
+        text.push(Line::from(vec![
+             Span::raw("Max Profit: "),
+             Span::styled(max_profit_s, Style::default().fg(Color::Green)),
+             Span::raw("  |  Max Loss: "),
+             Span::styled(max_loss_s, Style::default().fg(Color::Red)),
+        ]));
+
+        if !stats.breakevens.is_empty() {
+             let be_str: Vec<String> = stats.breakevens.iter().map(|b| format!("{:.0}", b)).collect();
+             text.push(Line::from(format!("Breakevens: {}", be_str.join(", "))));
+        }
+
+        let block = Block::default().borders(Borders::TOP).title(" Strategy ");
+        let paragraph = Paragraph::new(text).block(block);
+        
+        // We need a chunk for this. 
+        // NOTE: The layout defined earlier splits into 0: Header(4), 1: Min(0).
+        // We can't easily append to chunks[1] without resizing. 
+        // Ideally we should have defined a 3-chunk layout if strategy is active, or overlay.
+        // Let's render this as a Popup or just Overlay at the bottom?
+        // Better: Modify the Layout at the top of the function to be dynamic. 
+        // But `draw` takes `f`, and we already used `chunks`.
+        // Hack: Render a Clear widget then this paragraph on top of the bottom area? 
+        // No, let's just assume we can reserve the bottom 20% area. 
+        // Actually, we can define a new rect.
+        
+        if chunks.len() > 2 {
+             f.render_widget(paragraph, chunks[2]);
+        }
+    }
 }

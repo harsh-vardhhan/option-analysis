@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 mod app;
 mod model;
 mod ui;
+mod strategy;
 
 use app::App;
 use model::ApiResponse;
@@ -82,6 +83,9 @@ async fn main() -> Result<()> {
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => app.should_quit = true,
+                    KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
+                    KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
+                    KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
                     KeyCode::Down => app.next_row(),
                     KeyCode::Up => app.previous_row(),
                     KeyCode::Left | KeyCode::Right => app.toggle_column(),
