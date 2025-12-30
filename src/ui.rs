@@ -335,7 +335,15 @@ pub fn draw(f: &mut Frame, app: &App) {
         // If empty, y_min/max are 0.0. Give small range [-1000, 1000] for grid
         let (y_min, y_max) = if app.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
 
+        let zero_line_data = vec![(x_min, 0.0), (x_max, 0.0)];
+
         let datasets = vec![
+            Dataset::default()
+                .name("Zero")
+                .marker(symbols::Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(Color::Gray))
+                .data(&zero_line_data),
             Dataset::default()
                 .name("P&L")
                 .marker(symbols::Marker::Braille)
@@ -356,9 +364,9 @@ pub fn draw(f: &mut Frame, app: &App) {
                 .style(Style::default().fg(Color::Gray))
                 .bounds([y_min, y_max])
                 .labels(vec![
-                    Span::styled(format!("{:.0}", y_min), Style::default().fg(Color::Gray)),
+                    Span::styled(format_indian(y_min), Style::default().fg(Color::Gray)),
                     Span::styled("0", Style::default().fg(Color::Gray)),
-                    Span::styled(format!("{:.0}", y_max), Style::default().fg(Color::Gray)),
+                    Span::styled(format_indian(y_max), Style::default().fg(Color::Gray)),
                 ]));
         
         f.render_widget(chart, strategy_chunks[1]);
