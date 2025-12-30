@@ -10,11 +10,11 @@ use ratatui::{
 use crate::app::{App, ColumnSelection};
 
 pub fn draw(f: &mut Frame, app: &App) {
-    let constraints = if app.positions.is_empty() {
-        vec![Constraint::Length(4), Constraint::Min(0)]
-    } else {
-        vec![Constraint::Length(4), Constraint::Min(0), Constraint::Length(15)]
-    };
+    let constraints = vec![
+        Constraint::Length(4), 
+        Constraint::Min(0), 
+        Constraint::Length(15)
+    ];
 
     let chunks = Layout::default()
         .constraints(constraints)
@@ -186,39 +186,45 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_stateful_widget(table, chunks[1], &mut table_state);
 
     // --- STRATEGY PANEL ---
-    if !app.positions.is_empty() {
-        if chunks.len() > 2 {
-             // Split the bottom chunk into Left (Stats) and Right (Graph)
-             let strategy_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                .split(chunks[2]);
+    // --- STRATEGY PANEL ---
+    if chunks.len() > 2 {
+            // Split the bottom chunk into Left (Stats) and Right (Graph)
+            let strategy_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .split(chunks[2]);
 
-            // Calculate Stats
-            use crate::strategy::analyze_strategy;
-            let stats = analyze_strategy(&app.positions, spot_price);
+        // Calculate Stats
+        use crate::strategy::analyze_strategy;
+        let stats = analyze_strategy(&app.positions, spot_price);
 
-            let mut text = vec![
-                Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
-                Line::from(""),
-            ];
+        let mut text = vec![
+            Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
+            Line::from(""),
+        ];
 
-            // List Legs (Compact)
-            text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
-            for pos in &app.positions {
-                let side = if pos.qty > 0 { "BUY" } else { "SELL" };
-                let color = if pos.qty > 0 { Color::Green } else { Color::Red };
-                let kind = match pos.kind {
-                     crate::strategy::OptionType::Call => "CE",
-                     crate::strategy::OptionType::Put => "PE",
-                };
-                text.push(Line::from(vec![
-                    Span::styled(format!(" {:<4} ", side), Style::default().bg(color).fg(Color::Black)),
-                    Span::raw(format!(" {} {} @ {:.1}", pos.qty.abs(), kind, pos.entry_price)),
-                    Span::styled(format!("  Str: {:.0}", pos.strike), Style::default().fg(Color::Yellow)),
-                ]));
-            }
-            
+        // List Legs (Compact)
+        text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
+        if app.positions.is_empty() {
+            text.push(Line::from(Span::styled(" No active positions.", Style::default().fg(Color::DarkGray))));
+            text.push(Line::from(Span::styled(" Select strikes and press B/S to build.", Style::default().fg(Color::DarkGray))));
+        }
+        for pos in &app.positions {
+            let side = if pos.qty > 0 { "BUY" } else { "SELL" };
+            let color = if pos.qty > 0 { Color::Green } else { Color::Red };
+            let kind = match pos.kind {
+                    crate::strategy::OptionType::Call => "CE",
+                    crate::strategy::OptionType::Put => "PE",
+            };
+            text.push(Line::from(vec![
+                Span::styled(format!(" {:<4} ", side), Style::default().bg(color).fg(Color::Black)),
+                Span::raw(format!(" {} {} @ {:.1}", pos.qty.abs(), kind, pos.entry_price)),
+                Span::styled(format!("  Str: {:.0}", pos.strike), Style::default().fg(Color::Yellow)),
+            ]));
+        }
+        
+        let block = Block::default().borders(Borders::ALL).title(" Analysis ");
+        if !app.positions.is_empty() {
             // text.push(Line::from(""));
             text.push(Line::from(Span::styled("Analysis:", Style::default().add_modifier(Modifier::UNDERLINED))));
             
@@ -226,62 +232,67 @@ pub fn draw(f: &mut Frame, app: &App) {
             let max_loss_s = format!("{:.0}", stats.max_loss);
 
             text.push(Line::from(vec![
-                 Span::raw("Max Profit: "),
-                 Span::styled(max_profit_s, Style::default().fg(Color::Green)),
+                    Span::raw("Max Profit: "),
+                    Span::styled(max_profit_s, Style::default().fg(Color::Green)),
             ]));
             text.push(Line::from(vec![
-                 Span::raw("Max Loss:   "),
-                 Span::styled(max_loss_s, Style::default().fg(Color::Red)),
+                    Span::raw("Max Loss:   "),
+                    Span::styled(max_loss_s, Style::default().fg(Color::Red)),
             ]));
 
             if !stats.breakevens.is_empty() {
-                 let be_str: Vec<String> = stats.breakevens.iter().map(|b| format!("{:.0}", b)).collect();
-                 text.push(Line::from(vec![
-                     Span::raw("Breakeven:  "),
-                     Span::styled(be_str.join(", "), Style::default().fg(Color::Cyan)),
-                 ]));
-            }
-
-            let block = Block::default().borders(Borders::ALL).title(" Analysis ");
-            let paragraph = Paragraph::new(text).block(block);
-            f.render_widget(paragraph, strategy_chunks[0]);
-
-            // --- GRAPH ---
-            let x_labels = vec![
-                Span::styled(format!("{:.0}", stats.points.first().map(|p| p.0).unwrap_or(0.0)), Style::default().fg(Color::Gray)),
-                Span::styled(format!("{:.0}", stats.points.last().map(|p| p.0).unwrap_or(0.0)), Style::default().fg(Color::Gray)),
-            ];
-            
-            let y_min = stats.max_loss.min(0.0) * 1.1; // margin
-            let y_max = stats.max_profit.max(0.0) * 1.1;
-            
-            let datasets = vec![
-                Dataset::default()
-                    .name("P&L")
-                    .marker(symbols::Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Style::default().fg(Color::Yellow))
-                    .data(&stats.points),
-            ];
-            
-            let chart = Chart::new(datasets)
-                .block(Block::default().title(" Payoff Graph ").borders(Borders::ALL))
-                .x_axis(Axis::default()
-                    .title("Spot Price")
-                    .style(Style::default().fg(Color::Gray))
-                    .bounds([stats.points.first().map(|p| p.0).unwrap_or(0.0), stats.points.last().map(|p| p.0).unwrap_or(100.0)])
-                    .labels(x_labels))
-                .y_axis(Axis::default()
-                    .title("P&L")
-                    .style(Style::default().fg(Color::Gray))
-                    .bounds([y_min, y_max])
-                    .labels(vec![
-                        Span::styled(format!("{:.0}", y_min), Style::default().fg(Color::Gray)),
-                        Span::styled("0", Style::default().fg(Color::Gray)),
-                        Span::styled(format!("{:.0}", y_max), Style::default().fg(Color::Gray)),
+                    let be_str: Vec<String> = stats.breakevens.iter().map(|b| format!("{:.0}", b)).collect();
+                    text.push(Line::from(vec![
+                        Span::raw("Breakeven:  "),
+                        Span::styled(be_str.join(", "), Style::default().fg(Color::Cyan)),
                     ]));
-            
-            f.render_widget(chart, strategy_chunks[1]);
+            }
         }
+        let paragraph = Paragraph::new(text).block(block);
+        f.render_widget(paragraph, strategy_chunks[0]);
+
+        // --- GRAPH ---
+        // Default bounds if empty: Spot +/- 5%
+        let x_min = stats.points.first().map(|p| p.0).unwrap_or(spot_price * 0.95);
+        let x_max = stats.points.last().map(|p| p.0).unwrap_or(spot_price * 1.05);
+
+        let x_labels = vec![
+            Span::styled(format!("{:.0}", x_min), Style::default().fg(Color::Gray)),
+            Span::styled(format!("{:.0}", x_max), Style::default().fg(Color::Gray)),
+        ];
+        
+        let y_min = stats.max_loss.min(0.0) * 1.1; // margin
+        let y_max = stats.max_profit.max(0.0) * 1.1;
+        
+        // If empty, y_min/max are 0.0. Give small range [-1000, 1000] for grid
+        let (y_min, y_max) = if app.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
+
+        let datasets = vec![
+            Dataset::default()
+                .name("P&L")
+                .marker(symbols::Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(Color::Yellow))
+                .data(&stats.points),
+        ];
+        
+        let chart = Chart::new(datasets)
+            .block(Block::default().title(" Payoff Graph ").borders(Borders::ALL))
+            .x_axis(Axis::default()
+                .title("Spot Price")
+                .style(Style::default().fg(Color::Gray))
+                .bounds([x_min, x_max])
+                .labels(x_labels))
+            .y_axis(Axis::default()
+                .title("P&L")
+                .style(Style::default().fg(Color::Gray))
+                .bounds([y_min, y_max])
+                .labels(vec![
+                    Span::styled(format!("{:.0}", y_min), Style::default().fg(Color::Gray)),
+                    Span::styled("0", Style::default().fg(Color::Gray)),
+                    Span::styled(format!("{:.0}", y_max), Style::default().fg(Color::Gray)),
+                ]));
+        
+        f.render_widget(chart, strategy_chunks[1]);
     }
 }
