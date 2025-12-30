@@ -32,7 +32,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         Line::from(vec![
             Span::styled(format!(" {} ", underlying), Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::raw(" "),
-            Span::styled(format!(" ₹{:.2} ", spot_price), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" {:.2} ", spot_price), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::raw("  Expiry: "),
             Span::styled(expiry, Style::default().fg(Color::Yellow)),
             Span::raw("  |  Last Action: "),
@@ -261,13 +261,13 @@ pub fn draw(f: &mut Frame, app: &App) {
             let max_profit_s = if stats.max_profit_unlimited {
                  Span::styled("Unlimited", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
             } else {
-                 Span::styled(format!("{:.0}", stats.max_profit), Style::default().fg(Color::Green))
+                 Span::styled(format!("₹{:.0}", stats.max_profit), Style::default().fg(Color::Green))
             };
 
             let max_loss_s = if stats.max_loss_unlimited {
                  Span::styled("Unlimited", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
             } else {
-                 Span::styled(format!("{:.0}", stats.max_loss), Style::default().fg(Color::Red))
+                 Span::styled(format!("₹{:.0}", stats.max_loss), Style::default().fg(Color::Red))
             };
 
             text.push(Line::from(vec![
