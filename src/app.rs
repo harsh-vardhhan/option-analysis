@@ -418,14 +418,19 @@ impl App {
         if self.strategies.is_empty() { return; }
         if self.selected_strategy < self.strategies.len() - 1 {
             self.selected_strategy += 1;
+        } else {
+            self.selected_strategy = 0; // Wrap to start
         }
         // Always apply on interaction to support "re-triggering" or single-item interaction
         self.apply_strategy();
     }
 
     pub fn previous_strategy(&mut self) {
+        if self.strategies.is_empty() { return; }
         if self.selected_strategy > 0 {
             self.selected_strategy -= 1;
+        } else {
+            self.selected_strategy = self.strategies.len() - 1; // Wrap to end
         }
         // Always apply on interaction
         self.apply_strategy();
