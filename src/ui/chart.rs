@@ -28,6 +28,7 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
     let (y_min, y_max) = if app.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
 
     let zero_line_data = vec![(x_min, 0.0), (x_max, 0.0)];
+    let spot_line_data = vec![(spot_price, y_min), (spot_price, y_max)];
 
     let datasets = vec![
         Dataset::default()
@@ -36,6 +37,12 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
             .graph_type(GraphType::Line)
             .style(Style::default().fg(Color::Gray))
             .data(&zero_line_data),
+        Dataset::default()
+            .name("Spot")
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Blue))
+            .data(&spot_line_data),
         Dataset::default()
             .name("P&L")
             .marker(symbols::Marker::Braille)
