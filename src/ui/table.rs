@@ -147,6 +147,13 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         ])
     });
 
+    // Determine Border Color based on Focus
+    let border_color = if app.active_focus == crate::app::Focus::OptionChain {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
+
     let table = Table::new(rows, [
         Constraint::Min(10),        // Call OI: Flexible, at least 10
         Constraint::Length(20),     // Call LTP: Fixed reasonable width
@@ -165,7 +172,7 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         .bottom_margin(1)
         .height(1)
     )
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)).title(" Option Chain "))
+    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(border_color)).title(" Option Chain "))
     .column_spacing(1);
 
     // Sync selection state with persisted TableState

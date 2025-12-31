@@ -225,15 +225,38 @@ async fn main() -> Result<()> {
                         }
                     } else {
                         match key.code {
-                            KeyCode::Char('q') => app.should_quit = true,
-                            KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
-                            KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
-                            KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
-                            KeyCode::Down => app.next_row(),
-                            KeyCode::Up => app.previous_row(),
-                            KeyCode::Left | KeyCode::Right => app.toggle_column(),
-                            KeyCode::Char('?') => app.toggle_help(),
-                            _ => {}
+                            KeyCode::Tab | KeyCode::BackTab => {
+                                app.active_focus = match app.active_focus {
+                                    app::Focus::OptionChain => app::Focus::Strategies,
+                                    app::Focus::Strategies => app::Focus::OptionChain,
+                                };
+                            },
+                            _ => {
+                                match app.active_focus {
+                                    app::Focus::OptionChain => {
+                                        match key.code {
+                                            KeyCode::Char('q') => app.should_quit = true,
+                                            KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
+                                            KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
+                                            KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
+                                            KeyCode::Down => app.next_row(),
+                                            KeyCode::Up => app.previous_row(),
+                                            KeyCode::Left | KeyCode::Right => app.toggle_column(),
+                                            KeyCode::Char('?') => app.toggle_help(),
+                                            _ => {}
+                                        }
+                                    },
+                                    app::Focus::Strategies => {
+                                        match key.code {
+                                            KeyCode::Char('q') => app.should_quit = true,
+                                            KeyCode::Down => app.next_strategy(),
+                                            KeyCode::Up => app.previous_strategy(),
+                                            KeyCode::Char('?') => app.toggle_help(),
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

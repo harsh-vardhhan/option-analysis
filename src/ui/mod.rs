@@ -3,6 +3,7 @@ pub mod table;
 pub mod stats;
 pub mod chart;
 pub mod help;
+pub mod strategies;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -28,8 +29,18 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         return;
     }
 
+    // --- MIDDLE SECTION (Table + Strategies) ---
+    // Split chunks[1] into Table (80%) and Strategies (20%)
+    let middle_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .split(chunks[1]);
+
     // --- TABLE ---
-    table::draw(f, app, chunks[1]);
+    table::draw(f, app, middle_chunks[0]);
+    
+    // --- STRATEGIES ---
+    strategies::draw(f, app, middle_chunks[1]);
 
     // --- STRATEGY PANEL ---
     if chunks.len() > 2 {
