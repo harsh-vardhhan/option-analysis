@@ -12,6 +12,7 @@ mod app;
 mod model;
 mod ui;
 mod strategy;
+mod strategy_builder;
 
 use app::App;
 use model::ApiResponse;
