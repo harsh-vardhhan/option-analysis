@@ -44,7 +44,7 @@ impl App {
             show_help: false,
             
             active_focus: Focus::OptionChain,
-            strategies: vec!["Call Credit Spread"],
+            strategies: vec!["Call Credit Spread", "Put Credit Spread"],
             selected_strategy: 0,
         }
     }
@@ -344,6 +344,72 @@ impl App {
                 }
             } else {
                 self.last_message = String::from("Error: No Sell leg (Delta~0.3, Spread<=20) found");
+            }
+        } else if strategy_name == "Put Credit Spread" {
+            // Logic:
+            // 1. Sell Put with Delta closest to -0.3. Spread <= 20.0
+            // 2. Buy Put 100 points LOWER
+            
+            // Find Sell Leg (Short Put)
+            let sell_leg_idx = self.data.iter().enumerate()
+                .filter(|(_, d)| {
+                     if let Some(put) = &d.put_options {
+                         let spread = (put.market_data.ask_price - put.market_data.bid_price).abs();
+                         let delta = put.option_greeks.as_ref().map(|g| g.delta).unwrap_or(0.0);
+                         
+                         // Delta for put is -1 to 0.
+                         // Want closest to -0.3.
+                         // Filter range: -0.9 to -0.1
+                         spread <= 20.0 && delta > -0.9 && delta < -0.1
+                     } else {
+                         false
+                     }
+                })
+                .min_by(|(_, a), (_, b)| {
+                    let delta_a = a.put_options.as_ref().unwrap().option_greeks.as_ref().map(|g| g.delta).unwrap_or(0.0);
+                    let delta_b = b.put_options.as_ref().unwrap().option_greeks.as_ref().map(|g| g.delta).unwrap_or(0.0);
+                    // Compare distance to -0.3
+                    (delta_a - -0.3).abs().partial_cmp(&(delta_b - -0.3).abs()).unwrap()
+                })
+                .map(|(i, _)| i);
+                
+            if let Some(idx) = sell_leg_idx {
+                let sell_item = &self.data[idx];
+                let sell_strike = sell_item.strike_price;
+                let sell_price = sell_item.put_options.as_ref().unwrap().market_data.ltp; 
+                
+                // Find Buy Leg (Strike - 100)
+                let buy_strike_target = sell_strike - 100.0;
+                let buy_leg = self.data.iter().find(|d| (d.strike_price - buy_strike_target).abs() < 1.0);
+                
+                if let Some(buy_item) = buy_leg {
+                    let buy_price = buy_item.put_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0); 
+                    
+                    // Clear existing positions
+                    self.positions.clear();
+                    
+                    // Add Sell Leg (-1)
+                    self.positions.push(Position {
+                        strike: sell_strike,
+                        kind: OptionType::Put,
+                        qty: -1, // Sell
+                        entry_price: sell_price,
+                    });
+                    
+                    // Add Buy Leg (+1)
+                    self.positions.push(Position {
+                        strike: buy_strike_target,
+                        kind: OptionType::Put,
+                        qty: 1, // Buy
+                        entry_price: buy_price,
+                    });
+                    
+                    self.last_message = format!("Applied: PCS ({}/{})", sell_strike, buy_strike_target);
+                } else {
+                    self.last_message = String::from("Error: Buy leg (-100) not found");
+                }
+            } else {
+                self.last_message = String::from("Error: No Sell leg (Delta~-0.3, Spread<=20) found");
             }
         }
     }
