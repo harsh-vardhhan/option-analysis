@@ -1,5 +1,13 @@
 use serde::Deserialize;
 
+// Constants
+pub const LOT_SIZE: f64 = 65.0; // TODO: Make configurable per underlying
+const GRAPH_STEPS: usize = 200;
+const IV_WINDOW_SIGMA: f64 = 3.0; // Number of SDs for graph range
+const DEFAULT_VOLATILITY: f64 = 0.05; // Fallback only if IV is 0
+const UNLIMITED_SLOPE_THRESHOLD: f64 = 1e-4; 
+const RISK_FREE_RATE: f64 = 0.0; // Current assumption
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum OptionType {
     Call,
@@ -32,20 +40,20 @@ impl Position {
             OptionType::Put => (self.strike - spot_at_expiry).max(0.0),
         };
         
-        let lot_size = 65.0; 
         // Note: entry_price is per unit.
         // If Buy: Pay entry_price. PnL = (Intrinsic - Entry)
         // If Sell: Receive entry_price. PnL = (Entry - Intrinsic) = -(Intrinsic - Entry)
         // But qty handles the sign (-1 for Sell).
         // So (Intrinsic - Entry) * Qty is correct.
-        (intrinsic - self.entry_price) * self.qty as f64 * lot_size
+        (intrinsic - self.entry_price) * self.qty as f64 * LOT_SIZE
     }
 }
 
 pub fn calculate_net_payoff(positions: &[Position], spot: f64) -> f64 {
     positions.iter().map(|p| p.payoff(spot)).sum()
 }
-// A more standard approximation for CDF (Abramowitz and Stegun 26.2.17)
+
+// A standard approximation for Normal CDF (Abramowitz and Stegun 26.2.17)
 fn std_normal_cdf(x: f64) -> f64 {
     let b1 = 0.319381530;
     let b2 = -0.356563782;
@@ -78,12 +86,11 @@ pub fn analyze_strategy(
         return StrategyStats::default();
     }
 
-    // Graph Range (Standard Deviation based now?)
-    // 2 SD move for viz is good.
+    // Graph Range (Standard Deviation based)
     let volatility_range = if iv > 0.0 {
-        current_spot * (iv / 100.0) * (days_to_expiry / 365.0).sqrt() * 3.0 // 3 SD
+        current_spot * (iv / 100.0) * (days_to_expiry / 365.0).sqrt() * IV_WINDOW_SIGMA
     } else {
-        current_spot * 0.05
+        current_spot * DEFAULT_VOLATILITY
     };
     
     let range_min = current_spot - volatility_range;
@@ -97,8 +104,7 @@ pub fn analyze_strategy(
     let lower_bound = range_min.min(min_strike * 0.98);
     let upper_bound = range_max.max(max_strike * 1.02);
 
-    let steps = 200;
-    let step_size = (upper_bound - lower_bound) / steps as f64;
+    let step_size = (upper_bound - lower_bound) / GRAPH_STEPS as f64;
 
     let mut max_profit = f64::NEG_INFINITY;
     let mut max_loss = f64::INFINITY; 
@@ -108,7 +114,7 @@ pub fn analyze_strategy(
     let mut prev_pnl = calculate_net_payoff(positions, lower_bound);
     
     // 1. Calculate Graph Points & Range Extrema & Breakevens
-    for i in 0..=steps {
+    for i in 0..=GRAPH_STEPS {
         let spot = lower_bound + i as f64 * step_size;
         let pnl = calculate_net_payoff(positions, spot);
 
@@ -141,8 +147,8 @@ pub fn analyze_strategy(
     let mut max_profit_unlimited = false;
     let mut max_loss_unlimited = false;
 
-    if slope_high > 1e-4 { max_profit_unlimited = true; }
-    if slope_high < -1e-4 { max_loss_unlimited = true; }
+    if slope_high > UNLIMITED_SLOPE_THRESHOLD { max_profit_unlimited = true; }
+    if slope_high < -UNLIMITED_SLOPE_THRESHOLD { max_loss_unlimited = true; }
     
     let pnl_zero = calculate_net_payoff(positions, 0.0);
     
@@ -158,7 +164,7 @@ pub fn analyze_strategy(
         let t_years = days_to_expiry / 365.0;
         let sigma = iv / 100.0;
         let sigma_sqrt_t = sigma * t_years.sqrt();
-        let drift = -0.5 * sigma * sigma * t_years; // assuming r=0
+        let drift = (RISK_FREE_RATE - 0.5 * sigma * sigma) * t_years; 
         
         // Helper to get prob < X (Prob Price ends below X)
         // ln(ST/S0) ~ N(drift, vol)

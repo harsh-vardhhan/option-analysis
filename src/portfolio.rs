@@ -78,5 +78,6 @@ impl Portfolio {
             }
         }
     }
+}
 
 

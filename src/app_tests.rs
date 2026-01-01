@@ -36,8 +36,8 @@ mod tests {
         app.selected_column = ColumnSelection::Put;
         app.handle_trade_action(true);
 
-        assert_eq!(app.positions.len(), 1);
-        let pos = &app.positions[0];
+        assert_eq!(app.portfolio.positions.len(), 1);
+        let pos = &app.portfolio.positions[0];
         assert_eq!(pos.strike, 100.0);
         assert_eq!(pos.kind, OptionType::Put);
         assert_eq!(pos.qty, 1);
@@ -73,7 +73,7 @@ mod tests {
         assert!(!app.selected_positions.is_empty());
         
         app.delete_position();
-        assert!(app.positions.is_empty());
+        assert!(app.portfolio.positions.is_empty());
         assert!(app.selected_positions.is_empty(), "Deleting position should remove selection");
     }
 
@@ -96,7 +96,7 @@ mod tests {
         app.selected_column = ColumnSelection::Put;
         app.handle_trade_action(false); // Sell Put
         
-        assert_eq!(app.positions.len(), 2);
+        assert_eq!(app.portfolio.positions.len(), 2);
         
         // Select both positions
         // Select Call 100
@@ -117,10 +117,10 @@ mod tests {
         app.move_position_row(1);
         
         // Verify Positions
-        let call_pos = app.positions.iter().find(|p| p.kind == OptionType::Call).unwrap();
+        let call_pos = app.portfolio.positions.iter().find(|p| p.kind == OptionType::Call).unwrap();
         assert_eq!(call_pos.strike, 105.0);
         
-        let put_pos = app.positions.iter().find(|p| p.kind == OptionType::Put).unwrap();
+        let put_pos = app.portfolio.positions.iter().find(|p| p.kind == OptionType::Put).unwrap();
         assert_eq!(put_pos.strike, 115.0);
         
         // Verify Selection Keys Updated
@@ -144,7 +144,7 @@ mod tests {
         app.move_position_row(1);
         
         // Should NOT have moved
-        let pos = &app.positions[0];
+        let pos = &app.portfolio.positions[0];
         assert_eq!(pos.strike, 120.0);
         
         // Cursor probably shouldn't move either if it was focused there?
