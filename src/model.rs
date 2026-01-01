@@ -28,6 +28,8 @@ pub struct OptionContract {
 pub struct OptionGreeks {
     #[serde(default)]
     pub delta: f64,
+    #[serde(default)]
+    pub iv: f64,
 }
 
 #[derive(Debug, Deserialize, Clone)]

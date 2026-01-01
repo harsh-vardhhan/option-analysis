@@ -136,4 +136,33 @@ mod tests {
         // If cursor is at 4, move 1 -> 5 (invalid). Cursor stays at 4.
         assert_eq!(app.selected_row, 4);
     }
+    #[test]
+    fn test_pop_calculation() {
+        use crate::strategy::{analyze_strategy, Position, OptionType};
+        
+        let positions = vec![
+            Position {
+                strike: 100.0,
+                kind: OptionType::Call,
+                qty: 1,
+                entry_price: 5.0, 
+            }
+        ];
+        
+        // Spot 100, Strike 100. Breakeven 105.
+        // IV 20%, Time 1 Year.
+        // PoP should be Prob(Spot > 105).
+        // drift = -0.5*0.2^2 = -0.02.
+        // ln(105/100) = 0.04879.
+        // Z = (0.04879 - (-0.02)) / 0.2 = 0.06879 / 0.2 = 0.3439.
+        // Prob(x < Z) = CDF(0.3439) ~= 0.63.
+        // Prob(x > Z) = 1 - 0.63 = 0.37.
+        // So PoP should be around 37%.
+        
+        let stats = analyze_strategy(&positions, 100.0, 20.0, 365.0);
+        
+        println!("PoP: {}", stats.pop);
+        // Using broad range to allow for slight drift/calc diffs
+        assert!(stats.pop > 0.30 && stats.pop < 0.45);
+    }
 }

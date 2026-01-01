@@ -96,6 +96,11 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
                     Span::styled(be_str.join(", "), Style::default().fg(Color::Cyan)),
                 ]));
         }
+
+        text.push(Line::from(vec![
+            Span::raw("Prob. of Profit: "),
+            Span::styled(format!("{:.1}%", stats.pop * 100.0), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]));
     }
     let paragraph = Paragraph::new(text).block(block);
     f.render_widget(paragraph, area);
