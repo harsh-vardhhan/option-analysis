@@ -21,6 +21,15 @@ pub struct OptionData {
 #[derive(Debug, Deserialize, Clone)]
 pub struct OptionContract {
     pub market_data: MarketData,
+    pub option_greeks: Option<OptionGreeks>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct OptionGreeks {
+    #[serde(default)]
+    pub delta: f64,
+    #[serde(default)]
+    pub iv: f64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -28,6 +37,10 @@ pub struct MarketData {
     pub ltp: f64,
     #[serde(default)]
     pub oi: f64,
+    #[serde(default)]
+    pub bid_price: f64,
+    #[serde(default)]
+    pub ask_price: f64,
 }
 
 #[cfg(test)]

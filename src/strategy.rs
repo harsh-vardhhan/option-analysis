@@ -22,6 +22,7 @@ pub struct StrategyStats {
     pub max_loss_unlimited: bool,
     pub breakevens: Vec<f64>,
     pub points: Vec<(f64, f64)>,
+    pub pop: f64, // Probability of Profit [0.0, 1.0]
 }
 
 impl Position {
@@ -31,22 +32,12 @@ impl Position {
             OptionType::Put => (self.strike - spot_at_expiry).max(0.0),
         };
         
-        let _pnl_per_qty = intrinsic - self.entry_price;
-        // If Short (qty < 0): We received entry_price. PnL = (Entry - Intrinsic) * |Qty| = -(Intrinsic - Entry) * |Qty| = PnL_per_qty * Qty
-        // Wait, standard convention:
-        // Long Call: Pay 10. Spot 110 (Strike 100). Intrinsic 10. Net 0.
-        // Pnl = (Intrinsic - Entry) * Qty
-        
-        // Short Call: Receive 10. Spot 110. Intrinsic 10. Net 0.
-        // Pnl = (Intrinsic - Entry) * Qty = (10 - 10) * -1 = 0. Correct.
-        // Short Call: Receive 10. Spot 120. Intrinsic 20. Net -10.
-        // Pnl = (20 - 10) * -1 = -10. Correct.
-        
-        // Short Call: Receive 10. Spot 90. Intrinsic 0. Net +10.
-        // Pnl = (0 - 10) * -1 = +10. Correct.
-        
-        // NIFTY 50 Lot Size
         let lot_size = 65.0; 
+        // Note: entry_price is per unit.
+        // If Buy: Pay entry_price. PnL = (Intrinsic - Entry)
+        // If Sell: Receive entry_price. PnL = (Entry - Intrinsic) = -(Intrinsic - Entry)
+        // But qty handles the sign (-1 for Sell).
+        // So (Intrinsic - Entry) * Qty is correct.
         (intrinsic - self.entry_price) * self.qty as f64 * lot_size
     }
 }
@@ -54,32 +45,59 @@ impl Position {
 pub fn calculate_net_payoff(positions: &[Position], spot: f64) -> f64 {
     positions.iter().map(|p| p.payoff(spot)).sum()
 }
+// A more standard approximation for CDF (Abramowitz and Stegun 26.2.17)
+fn std_normal_cdf(x: f64) -> f64 {
+    let b1 = 0.319381530;
+    let b2 = -0.356563782;
+    let b3 = 1.781477937;
+    let b4 = -1.821255978;
+    let b5 = 1.330274429;
+    let p = 0.2316419;
+    let c2 = 0.39894228;
 
-pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategyStats {
+    let abs_x = x.abs();
+    let t = 1.0 / (1.0 + p * abs_x);
+    let val = 1.0 - c2 * (-x * x / 2.0).exp() *
+        (t * (b1 + t * (b2 + t * (b3 + t * (b4 + t * b5)))));
+
+    if x < 0.0 {
+        1.0 - val
+    } else {
+        val
+    }
+}
+
+
+pub fn analyze_strategy(
+    positions: &[Position], 
+    current_spot: f64, 
+    iv: f64, 
+    days_to_expiry: f64
+) -> StrategyStats {
     if positions.is_empty() {
         return StrategyStats::default();
     }
 
-    // Graph Range (for visualization)
-    // Graph Range (for visualization)
-    let (lower_bound, upper_bound) = if positions.is_empty() {
-        (current_spot * 0.95, current_spot * 1.05)
+    // Graph Range (Standard Deviation based now?)
+    // 2 SD move for viz is good.
+    let volatility_range = if iv > 0.0 {
+        current_spot * (iv / 100.0) * (days_to_expiry / 365.0).sqrt() * 3.0 // 3 SD
     } else {
-        let strikes: Vec<f64> = positions.iter().map(|p| p.strike).collect();
-        let min_strike = strikes.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max_strike = strikes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        
-        // Ensure Spot is included
-        let low_anchor = min_strike.min(current_spot);
-        let high_anchor = max_strike.max(current_spot);
-        
-        let diff = high_anchor - low_anchor;
-        // Margin: 50% of the active range, or 2% of spot if range is tiny
-        let margin = if diff < 1.0 { current_spot * 0.02 } else { diff * 0.5 };
-        
-        (low_anchor - margin, high_anchor + margin)
+        current_spot * 0.05
     };
-    let steps = 100;
+    
+    let range_min = current_spot - volatility_range;
+    let range_max = current_spot + volatility_range;
+    
+    // Extend for strikes
+    let strikes: Vec<f64> = positions.iter().map(|p| p.strike).collect();
+    let min_strike = strikes.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_strike = strikes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    
+    let lower_bound = range_min.min(min_strike * 0.98);
+    let upper_bound = range_max.max(max_strike * 1.02);
+
+    let steps = 200;
     let step_size = (upper_bound - lower_bound) / steps as f64;
 
     let mut max_profit = f64::NEG_INFINITY;
@@ -89,7 +107,7 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
 
     let mut prev_pnl = calculate_net_payoff(positions, lower_bound);
     
-    // 1. Calculate Graph Points & Range Extrema
+    // 1. Calculate Graph Points & Range Extrema & Breakevens
     for i in 0..=steps {
         let spot = lower_bound + i as f64 * step_size;
         let pnl = calculate_net_payoff(positions, spot);
@@ -100,7 +118,8 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
         // Breakeven crossing
         if (prev_pnl < 0.0 && pnl >= 0.0) || (prev_pnl > 0.0 && pnl <= 0.0) {
             let prev_spot = spot - step_size;
-            if (pnl - prev_pnl).abs() > 1e-6 {
+            // Linear iterpolation for precise root
+            if (pnl - prev_pnl).abs() > 1e-9 {
                 let zero_spot = prev_spot + (0.0 - prev_pnl) * (spot - prev_spot) / (pnl - prev_pnl);
                 breakevens.push(zero_spot);
             } else {
@@ -112,71 +131,75 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
         prev_pnl = pnl;
     }
 
-    // 2. Check Theoretical Limits (Unlimited P/L)
-    // Test Extremes: 0 and a very high number (e.g., 5x Spot)
-    let pnl_zero = calculate_net_payoff(positions, 0.0);
-    // Determine slope near zero: PnL(0) vs PnL(1.0)
-    let pnl_one = calculate_net_payoff(positions, 1.0);
-    let _slope_low = pnl_one - pnl_zero;
+    // 2. Value at Exact Spot (if not covered) - Points cover it roughly.
 
-    let high_spot = current_spot.max(100.0) * 10.0;
-    let pnl_high = calculate_net_payoff(positions, high_spot);
-    let pnl_high_minus = calculate_net_payoff(positions, high_spot - 1.0);
+    // 3. Unlimited Checks (Slope at ends)
+    let pnl_high = calculate_net_payoff(positions, current_spot * 10.0);
+    let pnl_high_minus = calculate_net_payoff(positions, current_spot * 10.0 - 1.0);
     let slope_high = pnl_high - pnl_high_minus;
 
-    // Check Downside (Price -> 0)
-    // If slope_low > 0 (Profit increases as price goes up from 0), then checks at 0 are:
-    // PnL(0). If PnL(0) is massively positive (unlikely for options unless crazy arb) -> bounded by 0.
-    // Real check: As Price goes to 0... 
-    //    If Put Long: Payoff increases. Slope_low (dPnL/dSpot) is negative.
-    //    If Put Short: Payoff decreases (Loss increases). Slope_low is positive (Loss lessens as price up).
-    
-    // Simpler check: Compare PnY at extremes
-    // Ideally, for options, linear payof at extremes.
-    // If slope_high > 0.01 -> Profit Unlimited Upside.
-    // If slope_high < -0.01 -> Loss Unlimited Upside.
-    
-    // If slope_low < -0.01 -> Profit Unlimited Downside (Profit increases as Price drops).
-    // If slope_low > 0.01 -> Loss Unlimited Downside (Loss increases as Price drops).
-    
     let mut max_profit_unlimited = false;
     let mut max_loss_unlimited = false;
 
-    // Upside
     if slope_high > 1e-4 { max_profit_unlimited = true; }
     if slope_high < -1e-4 { max_loss_unlimited = true; }
-
-    // Downside (As Price -> 0)
-    // Note: Price is bounded by 0, so Downside can technically be finite (Max Loss = Strike * Qty), but usually considered "Unlimited" or "Undefined Risk" in trader terms if it keeps growing till 0.
-    // However, usually "Unlimited" implies infinite. 0 is finite. 
-    // But for "Max Loss", Short Put is often called "undefined" or "unlimited" loosely, but strictly it is bounded by strike.
-    // Let's stick to "Unlimited" meaning "Infinite". 
-    // Short Put max loss is finite (Strike * Lot). 
-    // Short Call max loss is infinite.
     
-    // So distinct:
-    // Slope High checks infinity.
-    // Slope Low checks near 0.
+    let pnl_zero = calculate_net_payoff(positions, 0.0);
     
-    // Wait, let's stick to strict definitions.
-    // Short Call: Loss grows as price -> inf. (slope_high < 0) -> Max Loss Unlimited.
-    // Long Call: Profit grows as price -> inf. (slope_high > 0) -> Max Profit Unlimited.
-    
-    // Short Put: Loss grows as price -> 0. Finite max loss at 0. NOT Unlimited.
-    // Long Put: Profit grows as price -> 0. Finite max profit at 0. NOT Unlimited.
-    
-    // So ONLY Upside produces true Unlimited PnL for standard options.
-    
-    // However, UI wise, if current Max Profit variable is holding the max of the *visible range*, we should update it to be the theoretical max if possible.
-    // If bounded (Put side), the max is at 0 or high.
-    // Let's update `max_profit` and `max_loss` to be the TRUE global max/min if they are finite.
-    // If infinite, flag them.
-
-    // Re-eval max/min including 0 and Low/High bounds
     let candidates = vec![pnl_zero, pnl_high];
     for val in candidates {
         if !max_profit_unlimited && val > max_profit { max_profit = val; }
         if !max_loss_unlimited && val < max_loss { max_loss = val; }
+    }
+
+    // 4. Calculate PoP
+    let mut pop = 0.0;
+    if iv > 0.0 && days_to_expiry > 0.0 {
+        let t_years = days_to_expiry / 365.0;
+        let sigma = iv / 100.0;
+        let sigma_sqrt_t = sigma * t_years.sqrt();
+        let drift = -0.5 * sigma * sigma * t_years; // assuming r=0
+        
+        // Helper to get prob < X (Prob Price ends below X)
+        // ln(ST/S0) ~ N(drift, vol)
+        // ln(ST) - ln(S0) < Z
+        // ln(X/S0) < Z
+        let prob_below = |price: f64| -> f64 {
+            if price <= 0.0 { return 0.0; }
+            let d2 = ( (price / current_spot).ln() - drift ) / sigma_sqrt_t;
+            std_normal_cdf(d2)
+        };
+
+        // We identify profitable intervals.
+        // Breakevens divide the line into segments.
+        // We test a point in each segment.
+        
+        let mut sorted_points = breakevens.clone();
+        sorted_points.push(0.0); // Start
+        sorted_points.push(f64::INFINITY); // End
+        sorted_points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_points.dedup();
+        
+        for window in sorted_points.windows(2) {
+            let start = window[0];
+            let end = window[1];
+            
+            // Test mid point
+            let test_point = if end == f64::INFINITY {
+                start + 1.0 // just above start
+            } else if start == 0.0 {
+                end * 0.5
+            } else {
+                (start + end) / 2.0
+            };
+            
+            if calculate_net_payoff(positions, test_point) > 0.0 {
+                // This segment is profitable. Add probability mass.
+                let p_end = if end == f64::INFINITY { 1.0 } else { prob_below(end) };
+                let p_start = prob_below(start);
+                pop += p_end - p_start;
+            }
+        }
     }
 
     StrategyStats {
@@ -186,5 +209,6 @@ pub fn analyze_strategy(positions: &[Position], current_spot: f64) -> StrategySt
         max_loss_unlimited,
         breakevens,
         points,
+        pop,
     }
 }
