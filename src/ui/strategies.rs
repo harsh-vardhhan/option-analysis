@@ -10,7 +10,7 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let items: Vec<ListItem> = app.strategies
         .iter()
         .map(|s| {
-            ListItem::new(*s).style(Style::default().fg(Color::White))
+            ListItem::new(s.as_str()).style(Style::default().fg(Color::White))
         })
         .collect();
 

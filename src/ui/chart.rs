@@ -25,7 +25,7 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
     let y_max = stats.max_profit.max(0.0) * 1.1;
     
     // If empty, y_min/max are 0.0. Give small range [-1000, 1000] for grid
-    let (y_min, y_max) = if app.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
+    let (y_min, y_max) = if app.portfolio.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
 
     let zero_line_data = vec![(x_min, 0.0), (x_max, 0.0)];
     let spot_line_data = vec![(spot_price, y_min), (spot_price, y_max)];
@@ -51,34 +51,7 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
             .data(&stats.points),
     ];
     
-    // Helper for Indian Number System Formatting
-    let format_indian = |val: f64| -> String {
-        let abs_val = val.abs();
-        let int_part = abs_val as u64;
-        let s = int_part.to_string();
-        let mut bytes = s.into_bytes();
-        let len = bytes.len();
-        
-        let result = if len > 3 {
-             let last_three = String::from_utf8(bytes.split_off(len - 3)).unwrap();
-             let remaining = String::from_utf8(bytes).unwrap();
-             
-             let mut groups = Vec::new();
-             let r_chars: Vec<char> = remaining.chars().rev().collect();
-             for chunk in r_chars.chunks(2) {
-                 let g: String = chunk.iter().rev().collect();
-                 groups.push(g);
-             }
-             groups.reverse();
-             
-             groups.join(",") + "," + &last_three
-        } else {
-             String::from_utf8(bytes).unwrap()
-        };
-        
-        let sign = if val < 0.0 { "-" } else { "" };
-        format!("{}₹{}", sign, result)
-    };
+    // Helper removed, using crate::ui::format_indian_currency
 
     let chart = Chart::new(datasets)
         .block(Block::default().title(" Payoff Graph ").borders(Borders::ALL))
@@ -92,9 +65,9 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
             .style(Style::default().fg(Color::Gray))
             .bounds([y_min, y_max])
             .labels(vec![
-                Span::styled(format_indian(y_min), Style::default().fg(Color::Gray)),
+                Span::styled(crate::ui::format_indian_currency(y_min), Style::default().fg(Color::Gray)),
                 Span::styled("0", Style::default().fg(Color::Gray)),
-                Span::styled(format_indian(y_max), Style::default().fg(Color::Gray)),
+                Span::styled(crate::ui::format_indian_currency(y_max), Style::default().fg(Color::Gray)),
             ]));
     
     f.render_widget(chart, area);
