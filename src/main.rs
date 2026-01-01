@@ -13,6 +13,8 @@ mod model;
 mod ui;
 mod strategy;
 mod strategy_builder;
+#[cfg(test)]
+mod app_tests;
 
 use app::App;
 use model::ApiResponse;
@@ -239,6 +241,7 @@ async fn main() -> Result<()> {
                                             KeyCode::Char('q') => app.should_quit = true,
                                             KeyCode::Char('b') | KeyCode::Char('B') => app.handle_trade_action(true),
                                             KeyCode::Char('s') | KeyCode::Char('S') => app.handle_trade_action(false),
+                                            KeyCode::Char(' ') => app.toggle_selection(),
                                             KeyCode::Delete | KeyCode::Backspace => app.delete_position(),
                                             KeyCode::Down => app.next_row(),
                                             KeyCode::Up => app.previous_row(),

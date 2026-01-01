@@ -99,6 +99,36 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
             }
         }
 
+        // Check selection for Call
+        // Check selection for Call
+        // Note: Using format!("{:.0}") might be risky if we stored {:.2} in App. 
+        // Let's verify App usage. App uses {:.2}. 
+        // Table display uses {:.0} for strike text, but the data is f64.
+        // Let's match the key format used in App: format!("{:.2}", item.strike_price)
+        let call_key_exact = (format!("{:.2}", item.strike_price), crate::strategy::OptionType::Call);
+        if app.selected_positions.contains(&call_key_exact) {
+            call_style = call_style.bg(Color::DarkGray).add_modifier(Modifier::UNDERLINED);
+            // If it is also the cursor position, maybe combine?
+            // The cursor logic below overrides bg. We should ensure visibility.
+        }
+
+        let put_key_exact = (format!("{:.2}", item.strike_price), crate::strategy::OptionType::Put);
+        if app.selected_positions.contains(&put_key_exact) {
+             put_style = put_style.bg(Color::DarkGray).add_modifier(Modifier::UNDERLINED);
+        }
+
+        if i == app.selected_row {
+            let sel_bg = Color::White;
+            let sel_fg = Color::Black;
+            match app.selected_column {
+                ColumnSelection::Call => { call_style = call_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
+                ColumnSelection::Put => { put_style = put_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
+            }
+            if strike_style.bg != Some(Color::Blue) {
+               strike_style = strike_style.bg(Color::DarkGray);
+            }
+        }
+
         let call_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
         let put_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
 
