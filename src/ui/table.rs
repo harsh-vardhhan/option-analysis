@@ -56,12 +56,12 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
              // Grow Left <- (e.g. "   |||")
              vec![
                  Span::raw(empty_str),
-                 Span::styled(bar_str, Style::default().fg(color)),
+                 Span::styled(bar_str, Style::default().fg(color).add_modifier(Modifier::DIM)),
              ]
         } else {
              // Grow Right -> (e.g. "|||   ")
              vec![
-                 Span::styled(bar_str, Style::default().fg(color)),
+                 Span::styled(bar_str, Style::default().fg(color).add_modifier(Modifier::DIM)),
                  Span::raw(empty_str),
              ]
         };
