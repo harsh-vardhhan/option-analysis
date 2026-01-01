@@ -35,7 +35,8 @@ pub fn draw(f: &mut Frame, app: &App) {
             Row::new(vec![Cell::from(""), Cell::from("")]), // Spacer
 
             Row::new(vec![Cell::from("POSITION MANAGEMENT").style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Blue)), Cell::from("")]),
-            Row::new(vec![Cell::from("Shift + Arrow Up/Down"), Cell::from("Move Position Strike")]),
+            Row::new(vec![Cell::from("Space"), Cell::from("Select/Deselect Position for Multi-Move")]),
+            Row::new(vec![Cell::from("Shift + Arrow Up/Down"), Cell::from("Move Selected Position(s) Strike")]),
             Row::new(vec![Cell::from("Shift + Arrow L/R"), Cell::from("Move Phase (Call <-> Put)")]),
         ];
 
