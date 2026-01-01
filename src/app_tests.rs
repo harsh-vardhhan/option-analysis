@@ -52,13 +52,29 @@ mod tests {
         app.selected_row = 0;
         app.selected_column = ColumnSelection::Call;
         
+        // 1. Try to toggle on empty position -> Should NOT select
+        app.toggle_selection();
+        assert!(app.selected_positions.is_empty(), "Should not select empty position");
+        
+        // 2. Add Position
+        app.handle_trade_action(true); // Buy Call
+        
+        // 3. Toggle ON -> Should select
         app.toggle_selection();
         assert!(app.selected_positions.contains(&("100.00".to_string(), OptionType::Call)));
         assert_eq!(app.selected_positions.len(), 1);
         
-        // Toggle again should remove
+        // 4. Toggle OFF -> Should remove
         app.toggle_selection();
         assert!(app.selected_positions.is_empty());
+        
+        // 5. Select again and Delete
+        app.toggle_selection();
+        assert!(!app.selected_positions.is_empty());
+        
+        app.delete_position();
+        assert!(app.positions.is_empty());
+        assert!(app.selected_positions.is_empty(), "Deleting position should remove selection");
     }
 
     #[test]

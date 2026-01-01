@@ -111,7 +111,13 @@ impl App {
         if self.selected_positions.contains(&key) {
             self.selected_positions.remove(&key);
         } else {
-            self.selected_positions.insert(key);
+            // Only allow selection if a position exists at this strike/kind
+            let strike = item.strike_price;
+            let has_position = self.positions.iter().any(|p| (p.strike - strike).abs() < 0.01 && p.kind == kind);
+            
+            if has_position {
+                self.selected_positions.insert(key);
+            }
         }
     }
 
@@ -124,6 +130,12 @@ impl App {
             ColumnSelection::Call => OptionType::Call,
             ColumnSelection::Put => OptionType::Put,
         };
+
+        // Remove from selection if present
+        let key = (format!("{:.2}", strike), kind);
+        if self.selected_positions.contains(&key) {
+            self.selected_positions.remove(&key);
+        }
 
         self.positions.retain(|p| !(p.strike == strike && p.kind == kind));
     }
@@ -188,7 +200,16 @@ impl App {
             });
         }
         
-        // Cleanup: Remove 0 qty?
+        // Cleanup: Remove 0 qty
+        // Check for zero qty positions to remove from selection
+        for p in &self.positions {
+            if p.qty == 0 {
+                let key = (format!("{:.2}", p.strike), p.kind);
+                if self.selected_positions.contains(&key) {
+                    self.selected_positions.remove(&key);
+                }
+            }
+        }
         self.positions.retain(|p| p.qty != 0);
 
         // Update Message
