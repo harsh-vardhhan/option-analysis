@@ -20,6 +20,11 @@ mod app_tests;
 use app::App;
 use model::ApiResponse;
 
+// API Configuration
+const UPSTOX_API_BASE: &str = "https://api.upstox.com/v2/option/chain";
+const INSTRUMENT_KEY: &str = "NSE_INDEX|Nifty 50";
+const EXPIRY_DATE: &str = "2026-01-06";
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // 1. Setup Terminal Early
@@ -39,13 +44,20 @@ async fn main() -> Result<()> {
     // 4. Background Data Fetcher
     let token_clone = token.clone();
     tokio::spawn(async move {
+        // Client already created above, no need to recreate
+        // let client = reqwest::Client::new();
         let client = reqwest::Client::new();
-        // Assuming user wants NIFTY 50 for now, could also be configurable later
-        let url = "https://api.upstox.com/v2/option/chain?instrument_key=NSE_INDEX%7CNifty%2050&expiry_date=2026-01-06";
+        // Dynamic URL construction
+        let url = format!(
+            "{}?instrument_key={}&expiry_date={}", 
+            UPSTOX_API_BASE, 
+            urlencoding::encode(INSTRUMENT_KEY), 
+            EXPIRY_DATE
+        );
         
         loop {
             let res = client
-                .get(url)
+                .get(&url)
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("Authorization", format!("Bearer {}", token_clone))
