@@ -29,7 +29,7 @@ pub struct App {
     
     // New Fields
     pub active_focus: Focus,
-    pub strategies: Vec<&'static str>,
+    pub strategies: Vec<crate::strategy::Strategy>,
     pub selected_strategy: usize,
     
     // Multi-select
@@ -51,20 +51,7 @@ impl App {
             show_help: false,
             
             active_focus: Focus::OptionChain,
-            strategies: vec![
-                "Call Credit Spread", 
-                "Put Credit Spread",
-                "Call Debit Spread",
-                "Put Debit Spread",
-                "Long Call",
-                "Long Put",
-                "Short Call",
-                "Short Put",
-                "Short Straddle",
-                "Short Strangle",
-                "Iron Butterfly",
-                "Iron Condor",
-            ],
+            strategies: crate::strategy::Strategy::all().to_vec(),
             selected_strategy: 0,
             selected_positions: HashSet::new(),
         }

@@ -14,6 +14,58 @@ pub enum OptionType {
     Put,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Strategy {
+    CallCreditSpread,
+    PutCreditSpread,
+    CallDebitSpread,
+    PutDebitSpread,
+    LongCall,
+    LongPut,
+    ShortCall,
+    ShortPut,
+    ShortStraddle,
+    ShortStrangle,
+    IronButterfly,
+    IronCondor,
+}
+
+impl Strategy {
+    pub fn all() -> &'static [Strategy] {
+        &[
+            Strategy::CallCreditSpread,
+            Strategy::PutCreditSpread,
+            Strategy::CallDebitSpread,
+            Strategy::PutDebitSpread,
+            Strategy::LongCall,
+            Strategy::LongPut,
+            Strategy::ShortCall,
+            Strategy::ShortPut,
+            Strategy::ShortStraddle,
+            Strategy::ShortStrangle,
+            Strategy::IronButterfly,
+            Strategy::IronCondor,
+        ]
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Strategy::CallCreditSpread => "Call Credit Spread",
+            Strategy::PutCreditSpread => "Put Credit Spread",
+            Strategy::CallDebitSpread => "Call Debit Spread",
+            Strategy::PutDebitSpread => "Put Debit Spread",
+            Strategy::LongCall => "Long Call",
+            Strategy::LongPut => "Long Put",
+            Strategy::ShortCall => "Short Call",
+            Strategy::ShortPut => "Short Put",
+            Strategy::ShortStraddle => "Short Straddle",
+            Strategy::ShortStrangle => "Short Strangle",
+            Strategy::IronButterfly => "Iron Butterfly",
+            Strategy::IronCondor => "Iron Condor",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Position {
     pub strike: f64,
