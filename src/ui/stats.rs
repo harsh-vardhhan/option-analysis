@@ -9,34 +9,7 @@ use crate::app::App;
 use crate::strategy::StrategyStats;
 
 pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
-    // Helper for Indian Number System Formatting
-    let format_indian = |val: f64| -> String {
-        let abs_val = val.abs();
-        let int_part = abs_val as u64;
-        let s = int_part.to_string();
-        let mut bytes = s.into_bytes();
-        let len = bytes.len();
-        
-        let result = if len > 3 {
-            let last_three = String::from_utf8(bytes.split_off(len - 3)).unwrap();
-            let remaining = String::from_utf8(bytes).unwrap();
-            
-            let mut groups = Vec::new();
-            let r_chars: Vec<char> = remaining.chars().rev().collect();
-            for chunk in r_chars.chunks(2) {
-                let g: String = chunk.iter().rev().collect();
-                groups.push(g);
-            }
-            groups.reverse();
-            
-            groups.join(",") + "," + &last_three
-        } else {
-            String::from_utf8(bytes).unwrap()
-        };
-        
-        let sign = if val < 0.0 { "-" } else { "" };
-        format!("{}₹{}", sign, result)
-    };
+    // Helper removed, using crate::ui::format_indian_currency
 
     let mut text = vec![
         Line::from(Span::styled(" Strategy Builder ", Style::default().add_modifier(Modifier::BOLD).bg(Color::Blue).fg(Color::White))),
@@ -71,13 +44,13 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
         let max_profit_s = if stats.max_profit_unlimited {
                 Span::styled("Unlimited", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         } else {
-                Span::styled(format_indian(stats.max_profit), Style::default().fg(Color::Green))
+                Span::styled(crate::ui::format_indian_currency(stats.max_profit), Style::default().fg(Color::Green))
         };
 
         let max_loss_s = if stats.max_loss_unlimited {
                 Span::styled("Unlimited", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
         } else {
-                Span::styled(format_indian(stats.max_loss), Style::default().fg(Color::Red))
+                Span::styled(crate::ui::format_indian_currency(stats.max_loss), Style::default().fg(Color::Red))
         };
 
         text.push(Line::from(vec![

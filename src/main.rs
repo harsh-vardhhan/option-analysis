@@ -153,7 +153,7 @@ async fn main() -> Result<()> {
                 let closest = app.data.iter().enumerate().min_by(|(_, a), (_, b)| {
                     let diff_a = (a.strike_price - spot_price).abs();
                     let diff_b = (b.strike_price - spot_price).abs();
-                    diff_a.partial_cmp(&diff_b).unwrap()
+                    diff_a.partial_cmp(&diff_b).unwrap_or(std::cmp::Ordering::Equal)
                 }).map(|(i, _)| i);
 
                 if let Some(idx) = closest {
