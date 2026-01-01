@@ -1,6 +1,7 @@
 use crate::model::OptionData;
-use crate::strategy::{Position, OptionType};
+use crate::strategy::OptionType;
 use crate::strategy_builder::StrategyBuilder;
+use crate::portfolio::Portfolio;
 use ratatui::widgets::TableState;
 use std::collections::HashSet;
 
@@ -21,7 +22,7 @@ pub struct App {
     pub selected_column: ColumnSelection,
     pub should_quit: bool,
     pub initial_centering_done: bool,
-    pub positions: Vec<Position>,
+    pub portfolio: Portfolio,
     pub last_message: String,
     pub table_state: TableState,
     pub show_help: bool,
@@ -44,7 +45,7 @@ impl App {
             selected_column: ColumnSelection::Call,
             should_quit: false,
             initial_centering_done: false,
-            positions: Vec::new(),
+            portfolio: Portfolio::new(),
             last_message: String::from("Ready"),
             table_state: TableState::default(),
             show_help: false,
@@ -113,7 +114,7 @@ impl App {
         } else {
             // Only allow selection if a position exists at this strike/kind
             let strike = item.strike_price;
-            let has_position = self.positions.iter().any(|p| (p.strike - strike).abs() < 0.01 && p.kind == kind);
+            let has_position = self.portfolio.positions.iter().any(|p| (p.strike - strike).abs() < 0.01 && p.kind == kind);
             
             if has_position {
                 self.selected_positions.insert(key);
@@ -137,25 +138,12 @@ impl App {
             self.selected_positions.remove(&key);
         }
 
-        self.positions.retain(|p| !(p.strike == strike && p.kind == kind));
+        self.portfolio.remove(strike, kind);
     }
 
     pub fn update_live_prices(&mut self) {
         if self.data.is_empty() { return; }
-
-        for pos in &mut self.positions {
-            // Find current market price for this position
-            if let Some(market_row) = self.data.iter().find(|d| (d.strike_price - pos.strike).abs() < 0.1) {
-                let current_ltp = match pos.kind {
-                    crate::strategy::OptionType::Call => market_row.call_options.as_ref().map(|o| o.market_data.ltp),
-                    crate::strategy::OptionType::Put => market_row.put_options.as_ref().map(|o| o.market_data.ltp),
-                };
-
-                if let Some(price) = current_ltp {
-                    pos.entry_price = price;
-                }
-            }
-        }
+        self.portfolio.update_prices(&self.data);
     }
 
     pub fn handle_trade_action(&mut self, is_buy: bool) {
@@ -168,57 +156,14 @@ impl App {
             ColumnSelection::Put => (OptionType::Put, item.put_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0)),
         };
 
-        if let Some(pos) = self.positions.iter_mut().find(|p| p.strike == strike && p.kind == kind) {
-            // Flip logic or increment
-            if is_buy {
-                if pos.qty < 0 {
-                     pos.qty = 1;
-                     pos.entry_price = price;
-                } else {
-                    pos.qty += 1;
-                    let old_total = pos.entry_price * (pos.qty - 1) as f64;
-                    pos.entry_price = (old_total + price) / pos.qty as f64;
-                }
-            } else {
-                if pos.qty > 0 {
-                    pos.qty = -1;
-                    pos.entry_price = price;
-                } else {
-                    pos.qty -= 1;
-                    let old_qty_abs = (pos.qty + 1).abs() as f64;
-                    let old_total = pos.entry_price * old_qty_abs;
-                    pos.entry_price = (old_total + price) / pos.qty.abs() as f64;
-                }
-            }
-        } else {
-            // New Position
-            self.positions.push(Position {
-                strike,
-                kind,
-                qty: if is_buy { 1 } else { -1 },
-                entry_price: price,
-            });
-        }
+        self.last_message = self.portfolio.trade(strike, kind, price, is_buy);
         
         // Cleanup: Remove 0 qty
-        // Check for zero qty positions to remove from selection
-        for p in &self.positions {
-            if p.qty == 0 {
-                let key = (format!("{:.2}", p.strike), p.kind);
-                if self.selected_positions.contains(&key) {
-                    self.selected_positions.remove(&key);
-                }
-            }
-        }
-        self.positions.retain(|p| p.qty != 0);
-
-        // Update Message
-        let side = if is_buy { "BUY" } else { "SELL" };
-        let k_str = match kind {
-            OptionType::Call => "CE",
-            OptionType::Put => "PE",
-        };
-        self.last_message = format!("{} {} {} @ {:.2}", side, k_str, strike, price);
+        // Check for zero qty positions to remove from selection (Portfolio has already removed them from its list)
+        // We iterate our selection and check if it still exists in portfolio.
+        self.selected_positions.retain(|(s_key, s_kind)| {
+             self.portfolio.positions.iter().any(|p| format!("{:.2}", p.strike) == *s_key && p.kind == *s_kind)
+        });
     }
     pub fn move_position_row(&mut self, delta: i32) {
         if self.data.is_empty() { return; }
@@ -250,12 +195,12 @@ impl App {
                  ColumnSelection::Put => OptionType::Put,
              };
              
-             if let Some(pos_idx) = self.positions.iter().position(|p| p.strike == old_strike && p.kind == kind) {
+             if let Some(pos_idx) = self.portfolio.positions.iter().position(|p| p.strike == old_strike && p.kind == kind) {
                  positions_to_move.push(pos_idx);
              }
         } else {
             // Find all indices that match selected keys
-            for (i, p) in self.positions.iter().enumerate() {
+            for (i, p) in self.portfolio.positions.iter().enumerate() {
                 let key = (format!("{:.2}", p.strike), p.kind);
                 if self.selected_positions.contains(&key) {
                     positions_to_move.push(i);
@@ -274,7 +219,7 @@ impl App {
         let mut changes: Vec<(usize, f64, f64)> = Vec::new(); // (pos_index, new_strike, new_price)
 
         for &pos_idx in &positions_to_move {
-            let pos = &self.positions[pos_idx];
+            let pos = &self.portfolio.positions[pos_idx];
             
             // Find current data index for this position's strike
             // Optimization: Assuming sorted, could use binary search, but linear scan is fine for < 200 items.
@@ -324,7 +269,7 @@ impl App {
             // But `table.rs` only shows one.
             // Let's defer strict merging for now. It's an edge case (moving a spread leg onto another leg).
             
-            let pos = &mut self.positions[pos_idx];
+            let pos = &mut self.portfolio.positions[pos_idx];
             let old_strike_key = format!("{:.2}", pos.strike);
             let kind = pos.kind;
             
@@ -364,8 +309,8 @@ impl App {
         };
 
         // Check if position exists at current selection
-        if let Some(pos_idx) = self.positions.iter().position(|p| p.strike == strike && p.kind == old_kind) {
-            let mut pos = self.positions.remove(pos_idx);
+        if let Some(pos_idx) = self.portfolio.positions.iter().position(|p| p.strike == strike && p.kind == old_kind) {
+            let mut pos = self.portfolio.positions.remove(pos_idx);
             
             // Update to new kind
             pos.kind = new_kind;
@@ -376,7 +321,7 @@ impl App {
             pos.entry_price = new_ltp;
 
             // Merge check
-            if let Some(target_pos) = self.positions.iter_mut().find(|p| p.strike == strike && p.kind == new_kind) {
+            if let Some(target_pos) = self.portfolio.positions.iter_mut().find(|p| p.strike == strike && p.kind == new_kind) {
                 let total_qty = target_pos.qty + pos.qty;
                 if total_qty != 0 {
                     let old_val = target_pos.qty as f64 * target_pos.entry_price;
@@ -387,10 +332,10 @@ impl App {
                     target_pos.qty = 0;
                 }
             } else {
-                self.positions.push(pos);
+                self.portfolio.positions.push(pos);
             }
 
-             self.positions.retain(|p| p.qty != 0);
+             self.portfolio.positions.retain(|p| p.qty != 0);
         }
 
         // Toggle selection
@@ -404,7 +349,7 @@ impl App {
         
         match StrategyBuilder::build(strategy_name, &self.data) {
             Ok((new_positions, message)) => {
-                self.positions = new_positions;
+                self.portfolio.positions = new_positions;
                 self.last_message = message;
             },
             Err(e) => {

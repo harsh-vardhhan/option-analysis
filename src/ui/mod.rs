@@ -110,7 +110,7 @@ use chrono::{NaiveDate, Local};
         };
 
         use crate::strategy::analyze_strategy;
-        let stats = analyze_strategy(&app.positions, spot_price, atm_iv, days_to_expiry);
+        let stats = analyze_strategy(&app.portfolio.positions, spot_price, atm_iv, days_to_expiry);
 
         // Render Stats
         stats::draw(f, app, &stats, strategy_chunks[0]);

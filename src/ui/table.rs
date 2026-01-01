@@ -129,8 +129,8 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
             }
         }
 
-        let call_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
-        let put_qty = app.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
+        let call_qty = app.portfolio.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
+        let put_qty = app.portfolio.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
 
         // Helper to create badge spans
         let create_badge = |qty: i32| -> Span {

@@ -25,7 +25,7 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
     let y_max = stats.max_profit.max(0.0) * 1.1;
     
     // If empty, y_min/max are 0.0. Give small range [-1000, 1000] for grid
-    let (y_min, y_max) = if app.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
+    let (y_min, y_max) = if app.portfolio.positions.is_empty() { (-1000.0, 1000.0) } else { (y_min, y_max) };
 
     let zero_line_data = vec![(x_min, 0.0), (x_max, 0.0)];
     let spot_line_data = vec![(spot_price, y_min), (spot_price, y_max)];

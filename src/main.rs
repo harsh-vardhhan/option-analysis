@@ -13,6 +13,7 @@ mod model;
 mod ui;
 mod strategy;
 mod strategy_builder;
+mod portfolio;
 #[cfg(test)]
 mod app_tests;
 

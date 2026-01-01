@@ -45,11 +45,11 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
 
     // List Legs (Compact)
     text.push(Line::from(Span::styled("Active Legs:", Style::default().add_modifier(Modifier::UNDERLINED))));
-    if app.positions.is_empty() {
+    if app.portfolio.positions.is_empty() {
         text.push(Line::from(Span::styled(" No active positions.", Style::default().fg(Color::DarkGray))));
         text.push(Line::from(Span::styled(" Select strikes and press B/S to build.", Style::default().fg(Color::DarkGray))));
     }
-    for pos in &app.positions {
+    for pos in &app.portfolio.positions {
         let side = if pos.qty > 0 { "BUY" } else { "SELL" };
         let color = if pos.qty > 0 { Color::Green } else { Color::Red };
         let kind = match pos.kind {
@@ -64,7 +64,7 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
     }
     
     let block = Block::default().borders(Borders::ALL).title(" Analysis ");
-    if !app.positions.is_empty() {
+    if !app.portfolio.positions.is_empty() {
         // text.push(Line::from(""));
         text.push(Line::from(Span::styled("Analysis:", Style::default().add_modifier(Modifier::UNDERLINED))));
         
