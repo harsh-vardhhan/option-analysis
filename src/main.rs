@@ -35,7 +35,13 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // 2. Get Access Token (TUI Mode)
-    let token = ui::setup::run_setup_tui(&mut terminal)?;
+    let validation_url = format!(
+        "{}?instrument_key={}&expiry_date={}", 
+        UPSTOX_API_BASE, 
+        urlencoding::encode(INSTRUMENT_KEY), 
+        EXPIRY_DATE
+    );
+    let token = ui::setup::run_setup_tui(&mut terminal, &validation_url).await?;
 
     // 3. Setup App and Data Channel
     let mut app = App::new();
