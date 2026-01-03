@@ -139,8 +139,26 @@ use chrono::{NaiveDate, Local};
             0.0
         };
 
+        // Calculate Chain Step
+        let chain_step = if app.data.len() > 1 {
+            let mut strikes: Vec<f64> = app.data.iter().map(|d| d.strike_price).collect();
+            strikes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            strikes.dedup();
+            
+            let mut min_diff = f64::INFINITY;
+            for window in strikes.windows(2) {
+                let diff = (window[1] - window[0]).abs();
+                if diff < min_diff && diff > 1.0 {
+                    min_diff = diff;
+                }
+            }
+            if min_diff != f64::INFINITY { min_diff } else { 50.0 }
+        } else {
+            50.0
+        };
+
         use crate::strategy::analyze_strategy;
-        let stats = analyze_strategy(&app.portfolio.positions, spot_price, atm_iv, days_to_expiry);
+        let stats = analyze_strategy(&app.portfolio.positions, spot_price, atm_iv, days_to_expiry, chain_step);
 
         // Render Stats
         stats::draw(f, app, &stats, strategy_chunks[0]);

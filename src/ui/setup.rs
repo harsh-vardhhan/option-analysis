@@ -7,10 +7,15 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::Duration};
 
+pub enum SetupResult {
+    Token(String),
+    Demo,
+}
+
 pub async fn run_setup_tui(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     validation_url: &str,
-) -> Result<String> {
+) -> Result<SetupResult> {
     let mut token = String::new();
     let mut error_msg = String::new();
     let mut is_validating = false;
@@ -33,6 +38,7 @@ pub async fn run_setup_tui(
                     ratatui::layout::Constraint::Length(4), // Link
                     ratatui::layout::Constraint::Length(4), // Steps
                     ratatui::layout::Constraint::Length(3), // Input
+                    ratatui::layout::Constraint::Length(2), // Demo info
                     ratatui::layout::Constraint::Min(2),    // Error/Status
                 ])
                 .margin(2)
@@ -79,6 +85,10 @@ pub async fn run_setup_tui(
                 .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                 .block(input_block);
 
+            let demo_info = ratatui::widgets::Paragraph::new(
+                ratatui::text::Line::from(vec![ratatui::text::Span::raw("Or press "), ratatui::text::Span::styled("D", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD)), ratatui::text::Span::raw(" for Demo Mode")])
+            ).alignment(ratatui::layout::Alignment::Center);
+
             let status_text = if is_validating {
                 ratatui::text::Line::from(ratatui::text::Span::styled("Validating token...", ratatui::style::Style::default().fg(ratatui::style::Color::Yellow)))
             } else if error_msg.is_empty() {
@@ -94,7 +104,8 @@ pub async fn run_setup_tui(
             f.render_widget(link, chunks[1]);
             f.render_widget(steps, chunks[2]);
             f.render_widget(input, chunks[3]);
-            f.render_widget(status, chunks[4]);
+            f.render_widget(demo_info, chunks[4]);
+            f.render_widget(status, chunks[5]);
 
         })?;
 
@@ -154,6 +165,9 @@ pub async fn run_setup_tui(
                 if let Event::Key(key) = e {
                     if key.kind == event::KeyEventKind::Press {
                         match key.code {
+                            KeyCode::Char('d') | KeyCode::Char('D') if token.trim().is_empty() => {
+                                return Ok(SetupResult::Demo);
+                            },
                             KeyCode::Char(c) => {
                                 token.push(c);
                                 error_msg.clear();
@@ -188,5 +202,5 @@ pub async fn run_setup_tui(
         }
     }
 
-    Ok(token.trim().to_string())
+    Ok(SetupResult::Token(token.trim().to_string()))
 }

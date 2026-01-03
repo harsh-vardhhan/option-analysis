@@ -41,50 +41,69 @@ async fn main() -> Result<()> {
         urlencoding::encode(INSTRUMENT_KEY), 
         EXPIRY_DATE
     );
-    let token = ui::setup::run_setup_tui(&mut terminal, &validation_url).await?;
+    let setup_result = ui::setup::run_setup_tui(&mut terminal, &validation_url).await?;
 
     // 3. Setup App and Data Channel
     let mut app = App::new();
     let (tx, mut rx) = mpsc::channel(10);
 
     // 4. Background Data Fetcher
-    let token_clone = token.clone();
-    tokio::spawn(async move {
-        // Client already created above, no need to recreate
-        // let client = reqwest::Client::new();
-        let client = reqwest::Client::new();
-        // Dynamic URL construction
-        let url = format!(
-            "{}?instrument_key={}&expiry_date={}", 
-            UPSTOX_API_BASE, 
-            urlencoding::encode(INSTRUMENT_KEY), 
-            EXPIRY_DATE
-        );
+    match setup_result {
+        ui::setup::SetupResult::Token(token) => {
+            let token_clone = token.clone();
+            tokio::spawn(async move {
+                let client = reqwest::Client::new();
+                let url = format!(
+                    "{}?instrument_key={}&expiry_date={}", 
+                    UPSTOX_API_BASE, 
+                    urlencoding::encode(INSTRUMENT_KEY), 
+                    EXPIRY_DATE
+                );
+                
+                loop {
+                    let res = client
+                        .get(&url)
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .header("Authorization", format!("Bearer {}", token_clone))
+                        .send()
+                        .await;
         
-        loop {
-            let res = client
-                .get(&url)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .header("Authorization", format!("Bearer {}", token_clone))
-                .send()
-                .await;
-
-            match res {
-                Ok(response) => {
-                    if let Ok(api_response) = response.json::<ApiResponse>().await {
-                        if !api_response.data.is_empty() {
-                            let _ = tx.send(api_response.data).await;
+                    match res {
+                        Ok(response) => {
+                            if let Ok(api_response) = response.json::<ApiResponse>().await {
+                                if !api_response.data.is_empty() {
+                                    let _ = tx.send(api_response.data).await;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                             eprintln!("Error fetching data: {}", e);
                         }
                     }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
-                Err(e) => {
-                     eprintln!("Error fetching data: {}", e);
+            });
+        },
+        ui::setup::SetupResult::Demo => {
+            tokio::spawn(async move {
+                // Send initial data immediately
+                let dummy_data = ApiResponse::generate_dummy_data();
+                let _ = tx.send(dummy_data).await;
+                
+                // Simulate updates
+                loop {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    // In a real demo we might jitter the prices here, but for now static is fine
+                    // or re-generate to simulate slight noise if I added rand.
+                    // Since I didn't add rand, it's static. 
+                    // But sending it again keeps the loop alive and confirms connectivity.
+                     let dummy_data = ApiResponse::generate_dummy_data();
+                    let _ = tx.send(dummy_data).await;
                 }
-            }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            });
         }
-    });
+    }
 
     // 5. Main Event Loop
     let tick_rate = Duration::from_millis(250);
