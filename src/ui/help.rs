@@ -37,7 +37,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             Row::new(vec![Cell::from("POSITION MANAGEMENT").style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Blue)), Cell::from("")]),
             Row::new(vec![Cell::from("Space"), Cell::from("Select/Deselect Position for Multi-Move")]),
             Row::new(vec![Cell::from("Shift + Arrow Up/Down"), Cell::from("Move Selected Position(s) Strike")]),
-            Row::new(vec![Cell::from("Shift + Arrow L/R"), Cell::from("Move Phase (Call <-> Put)")]),
+            Row::new(vec![Cell::from("Shift + Arrow L/R"), Cell::from("Switch Expiry Date")]),
         ];
 
         let table = Table::new(rows, [
