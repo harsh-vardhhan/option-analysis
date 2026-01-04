@@ -30,7 +30,49 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
     let zero_line_data = vec![(x_min, 0.0), (x_max, 0.0)];
     let spot_line_data = vec![(spot_price, y_min), (spot_price, y_max)];
 
-    let datasets = vec![
+    // Segment points into Profit (Green) and Loss (Red)
+    let mut segments: Vec<(Vec<(f64, f64)>, Color)> = Vec::new();
+    
+    if !stats.points.is_empty() {
+        let mut current_segment = Vec::new();
+        // Determine initial state: True if Green (>= 0), False if Red (< 0)
+        let mut is_green = stats.points[0].1 >= 0.0;
+        
+        current_segment.push(stats.points[0]);
+
+        for i in 0..stats.points.len() - 1 {
+            let p1 = stats.points[i];
+            let p2 = stats.points[i+1];
+            
+            let p1_green = p1.1 >= 0.0;
+            let p2_green = p2.1 >= 0.0;
+            
+            if p1_green != p2_green {
+                // Crossing zero
+                // Interpolate x where y = 0
+                // Slope m = (y2 - y1) / (x2 - x1)
+                // y - y1 = m * (x - x1) => 0 - y1 = m * (x_zero - x1)
+                // x_zero = x1 - y1 / m = x1 - y1 * (x2 - x1) / (y2 - y1)
+                let x_zero = p1.0 - p1.1 * (p2.0 - p1.0) / (p2.1 - p1.1);
+                let p_zero = (x_zero, 0.0);
+                
+                // Finish current segment
+                current_segment.push(p_zero);
+                segments.push((current_segment, if is_green { Color::Green } else { Color::Red }));
+                
+                // Start new segment
+                current_segment = Vec::new();
+                current_segment.push(p_zero);
+                is_green = !is_green; // Toggle state
+            }
+            
+            current_segment.push(p2);
+        }
+        // Push final segment
+        segments.push((current_segment, if is_green { Color::Green } else { Color::Red }));
+    }
+
+    let mut datasets = vec![
         Dataset::default()
             .name("Zero")
             .marker(symbols::Marker::Braille)
@@ -43,13 +85,17 @@ pub fn draw(f: &mut Frame, app: &App, stats: &StrategyStats, area: Rect) {
             .graph_type(GraphType::Line)
             .style(Style::default().fg(Color::Blue))
             .data(&spot_line_data),
-        Dataset::default()
-            .name("P&L")
-            .marker(symbols::Marker::Braille)
-            .graph_type(GraphType::Line)
-            .style(Style::default().fg(Color::Yellow))
-            .data(&stats.points),
     ];
+
+    for (seg_data, color) in &segments {
+        datasets.push(
+            Dataset::default()
+                .marker(symbols::Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(*color))
+                .data(seg_data)
+        );
+    }
     
     // Helper removed, using crate::ui::format_indian_currency
 

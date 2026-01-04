@@ -7,9 +7,18 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::Duration};
 
-pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<String> {
+pub enum SetupResult {
+    Token(String),
+    Demo,
+}
+
+pub async fn run_setup_tui(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    validation_url: &str,
+) -> Result<SetupResult> {
     let mut token = String::new();
     let mut error_msg = String::new();
+    let mut is_validating = false;
 
     loop {
         terminal.draw(|f| {
@@ -29,6 +38,7 @@ pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> R
                     ratatui::layout::Constraint::Length(4), // Link
                     ratatui::layout::Constraint::Length(4), // Steps
                     ratatui::layout::Constraint::Length(3), // Input
+                    ratatui::layout::Constraint::Length(2), // Demo info
                     ratatui::layout::Constraint::Min(2),    // Error/Status
                 ])
                 .margin(2)
@@ -75,22 +85,72 @@ pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> R
                 .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                 .block(input_block);
 
-            let status = ratatui::widgets::Paragraph::new(if error_msg.is_empty() { 
-                    ratatui::text::Line::from(vec![ratatui::text::Span::raw("Press "), ratatui::text::Span::styled("Enter", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD)), ratatui::text::Span::raw(" to continue")])
-                } else {
-                    ratatui::text::Line::from(ratatui::text::Span::styled(format!("Error: {}", error_msg), ratatui::style::Style::default().fg(ratatui::style::Color::Red)))
-                })
+            let demo_info = ratatui::widgets::Paragraph::new(
+                ratatui::text::Line::from(vec![ratatui::text::Span::raw("Or press "), ratatui::text::Span::styled("D", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD)), ratatui::text::Span::raw(" for Demo Mode")])
+            ).alignment(ratatui::layout::Alignment::Center);
+
+            let status_text = if is_validating {
+                ratatui::text::Line::from(ratatui::text::Span::styled("Validating token...", ratatui::style::Style::default().fg(ratatui::style::Color::Yellow)))
+            } else if error_msg.is_empty() {
+                ratatui::text::Line::from(vec![ratatui::text::Span::raw("Press "), ratatui::text::Span::styled("Enter", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD)), ratatui::text::Span::raw(" to continue")])
+            } else {
+                ratatui::text::Line::from(ratatui::text::Span::styled(format!("Error: {}", error_msg), ratatui::style::Style::default().fg(ratatui::style::Color::Red)))
+            };
+
+            let status = ratatui::widgets::Paragraph::new(status_text)
                 .alignment(ratatui::layout::Alignment::Center);
 
             f.render_widget(welcome, chunks[0]);
             f.render_widget(link, chunks[1]);
             f.render_widget(steps, chunks[2]);
             f.render_widget(input, chunks[3]);
-            f.render_widget(status, chunks[4]);
+            f.render_widget(demo_info, chunks[4]);
+            f.render_widget(status, chunks[5]);
 
         })?;
 
-        let mut should_break = false;
+        // If validating, logic is handled below after drawing "Validating..."
+        // But we need to actually do the validation now if we set the flag in the previous loop iteration?
+        // No, let's do it inline to keep it simple, but we need to re-draw for "Validating" to show up.
+        // So we can set is_validating = true, re-draw, then validate.
+        
+        if is_validating {
+            // Perform validation
+             let client = reqwest::Client::new();
+             let res = client.get(validation_url)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("Authorization", format!("Bearer {}", token.trim()))
+                .send()
+                .await;
+
+            is_validating = false; // Reset flag
+
+            match res {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        // Check if data is not empty / valid API response structure if needed
+                        // But status 200 is usually enough for auth check.
+                        // Ideally we check if it returns proper JSON, but let's assume 200 means auth worked.
+                        break; 
+                    } else {
+                        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+                             error_msg = "Invalid Access Token".to_string();
+                        } else {
+                             error_msg = format!("API Error: {}", response.status());
+                        }
+                    }
+                },
+                Err(e) => {
+                    error_msg = format!("Network/Request Error: {}", e);
+                }
+            }
+            continue; // Re-loop to show result
+        }
+
+
+        let mut should_validate = false;
+
         if event::poll(Duration::from_millis(100))? {
             // Read first event strictly
             let first_event = event::read()?;
@@ -105,6 +165,9 @@ pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> R
                 if let Event::Key(key) = e {
                     if key.kind == event::KeyEventKind::Press {
                         match key.code {
+                            KeyCode::Char('d') | KeyCode::Char('D') if token.trim().is_empty() => {
+                                return Ok(SetupResult::Demo);
+                            },
                             KeyCode::Char(c) => {
                                 token.push(c);
                                 error_msg.clear();
@@ -117,18 +180,13 @@ pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> R
                                 if token.trim().is_empty() {
                                     error_msg = "Token cannot be empty".to_string();
                                 } else {
-                                    should_break = true;
+                                    should_validate = true;
                                 }
                             },
                             KeyCode::Esc => {
                                 disable_raw_mode()?;
                                 execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
                                 terminal.show_cursor()?;
-                                // We return an error or handle exit. 
-                                // Since we are in run_setup_tui, maybe we should return Result<Option<String>>?
-                                // Or we can just panic/exit. The original code just returned Ok(()).
-                                // But here main expects a token.
-                                // Let's exit the process? Or return Error.
                                 return Err(anyhow::anyhow!("User cancelled setup"));
                             }
                             _ => {}
@@ -138,10 +196,11 @@ pub fn run_setup_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> R
             }
         }
         
-        if should_break {
-            break;
+        if should_validate {
+            is_validating = true;
+            // Next loop iteration will draw "Validating..." and then perform the check
         }
     }
 
-    Ok(token.trim().to_string())
+    Ok(SetupResult::Token(token.trim().to_string()))
 }
