@@ -51,3 +51,20 @@ jobs:
       with:
         name: trakbit-${{ matrix.os }}
         path: target/release/trakbit*
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
+
+    - name: Upload to S3 (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        aws s3 cp target/release/trakbit s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os }}/trakbit --acl public-read
+
+    - name: Upload to S3 (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        aws s3 cp target/release/trakbit.exe s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os }}/trakbit.exe --acl public-read
