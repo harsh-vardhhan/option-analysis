@@ -311,55 +311,8 @@ impl App {
         }
     }
 
-    pub fn move_position_col(&mut self) {
-        if self.data.is_empty() { return; }
-        
-        // Determine move direction based on current column
-        // If Call -> Move to Put (Right). If Put -> Move to Call (Left).
-        // This toggles selection.
-        
-        let old_col = &self.selected_column;
-        let item = &self.data[self.selected_row];
-        let strike = item.strike_price;
+    // move_position_col removed as it is no longer bound to any key.
 
-        let (old_kind, new_kind) = match old_col {
-            ColumnSelection::Call => (OptionType::Call, OptionType::Put),
-            ColumnSelection::Put => (OptionType::Put, OptionType::Call),
-        };
-
-        // Check if position exists at current selection
-        if let Some(pos_idx) = self.portfolio.positions.iter().position(|p| p.strike == strike && p.kind == old_kind) {
-            let mut pos = self.portfolio.positions.remove(pos_idx);
-            
-            // Update to new kind
-            pos.kind = new_kind;
-            let new_ltp = match new_kind {
-                 OptionType::Call => item.call_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0),
-                 OptionType::Put => item.put_options.as_ref().map(|o| o.market_data.ltp).unwrap_or(0.0),
-            };
-            pos.entry_price = new_ltp;
-
-            // Merge check
-            if let Some(target_pos) = self.portfolio.positions.iter_mut().find(|p| p.strike == strike && p.kind == new_kind) {
-                let total_qty = target_pos.qty + pos.qty;
-                if total_qty != 0 {
-                    let old_val = target_pos.qty as f64 * target_pos.entry_price;
-                    let move_val = pos.qty as f64 * pos.entry_price;
-                    target_pos.entry_price = (old_val + move_val) / total_qty as f64;
-                    target_pos.qty = total_qty;
-                } else {
-                    target_pos.qty = 0;
-                }
-            } else {
-                self.portfolio.positions.push(pos);
-            }
-
-             self.portfolio.positions.retain(|p| p.qty != 0);
-        }
-
-        // Toggle selection
-        self.toggle_column();
-    }
 
     pub fn apply_strategy(&mut self) {
         if self.data.is_empty() { return; }
