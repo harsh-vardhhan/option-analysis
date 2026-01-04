@@ -34,8 +34,8 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     });
     
     // Calculate available width for OI columns
-    // Total width - Fixed columns (20+12+20=52) - Borders (2) - Spacing (4) = 58 overhead
-    let overhead = 58;
+    // Total width - Fixed columns (LTP 22*2 + Strike 10 + Delta 8*2 = 70) - Borders (2) - Spacing (6) = 78 overhead
+    let overhead = 78;
     let available_width = area.width.saturating_sub(overhead) as usize;
     let max_bar_width = (available_width / 2).max(10); // Ensure at least 10 chars
 
@@ -107,7 +107,6 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         }
 
         // Check selection for Call
-        // Check selection for Call
         // Note: Using format!("{:.0}") might be risky if we stored {:.2} in App. 
         // Let's verify App usage. App uses {:.2}. 
         // Table display uses {:.0} for strike text, but the data is f64.
@@ -115,8 +114,6 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         let call_key_exact = (format!("{:.2}", item.strike_price), crate::strategy::OptionType::Call);
         if app.selected_positions.contains(&call_key_exact) {
             call_style = call_style.bg(Color::DarkGray).add_modifier(Modifier::UNDERLINED);
-            // If it is also the cursor position, maybe combine?
-            // The cursor logic below overrides bg. We should ensure visibility.
         }
 
         let put_key_exact = (format!("{:.2}", item.strike_price), crate::strategy::OptionType::Put);
@@ -124,17 +121,9 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
              put_style = put_style.bg(Color::DarkGray).add_modifier(Modifier::UNDERLINED);
         }
 
-        if i == app.selected_row {
-            let sel_bg = Color::White;
-            let sel_fg = Color::Black;
-            match app.selected_column {
-                ColumnSelection::Call => { call_style = call_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
-                ColumnSelection::Put => { put_style = put_style.bg(sel_bg).fg(sel_fg).add_modifier(Modifier::BOLD); }
-            }
-            if strike_style.bg != Some(Color::Blue) {
-               strike_style = strike_style.bg(Color::DarkGray);
-            }
-        }
+        // Apply Selection Style Override if this row is selected (re-apply to ensure it's on top of ITM colors)
+        // Actually, we already did this above. The issue is `if i == app.selected_row` block is duplicated in original code.
+        // I will just rely on the first block.
 
         let call_qty = app.portfolio.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Call).map(|p| p.qty).unwrap_or(0);
         let put_qty = app.portfolio.positions.iter().find(|p| p.strike == item.strike_price && p.kind == crate::strategy::OptionType::Put).map(|p| p.qty).unwrap_or(0);
@@ -171,15 +160,21 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         } else {
             vec![Span::raw(format!("{:.2}", put_ltp))]
         };
+        
+        // Get Deltas (Prefer API value)
+        let call_delta = item.call_options.as_ref().and_then(|o| o.option_greeks.as_ref()).map(|g| g.delta).unwrap_or(0.0);
+        let put_delta = item.put_options.as_ref().and_then(|o| o.option_greeks.as_ref()).map(|g| g.delta).unwrap_or(0.0);
 
         // Point Inwards:
         // Left Column (Call OI): Grow Right -> (grow_left = false)
         // Right Column (Put OI): Grow Left <- (grow_left = true)
         Row::new(vec![
             Cell::from(draw_bar(call_oi, max_oi, Color::Green, false).alignment(Alignment::Left)).style(call_style),
+            Cell::from(Line::from(format!("{:.2}", call_delta)).alignment(Alignment::Center)).style(call_style),
             Cell::from(Line::from(call_content).alignment(Alignment::Right)).style(call_style),
             Cell::from(Line::from(format!("{:.0}", item.strike_price)).alignment(Alignment::Center)).style(strike_style),
             Cell::from(Line::from(put_content).alignment(Alignment::Left)).style(put_style),
+            Cell::from(Line::from(format!("{:.2}", put_delta)).alignment(Alignment::Center)).style(put_style),
             Cell::from(draw_bar(put_oi, max_oi, Color::Red, true).alignment(Alignment::Right)).style(put_style),
         ])
     });
@@ -192,18 +187,22 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let table = Table::new(rows, [
-        Constraint::Min(10),        // Call OI: Flexible, at least 10
-        Constraint::Length(20),     // Call LTP: Fixed reasonable width
-        Constraint::Length(12),     // Strike: Fixed
-        Constraint::Length(20),     // Put LTP: Fixed
-        Constraint::Min(10),        // Put OI: Flexible
+        Constraint::Min(8),         // Call OI
+        Constraint::Length(8),      // Call Delta
+        Constraint::Length(22),     // Call LTP: Increased to fit badges
+        Constraint::Length(10),     // Strike
+        Constraint::Length(22),     // Put LTP: Increased to fit badges
+        Constraint::Length(8),      // Put Delta
+        Constraint::Min(8),         // Put OI
     ])
     .header(
         Row::new(vec![
             Cell::from(Line::from("OI").alignment(Alignment::Left)).style(Style::default().fg(Color::Green)),
+            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Green.clone())), // slightly simpler color
             Cell::from(Line::from("CALLS").alignment(Alignment::Right)).style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("STRIKE").alignment(Alignment::Center)).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("PUTS").alignment(Alignment::Left)).style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Red.clone())),
             Cell::from(Line::from("OI").alignment(Alignment::Right)).style(Style::default().fg(Color::Red)),
         ])
         .bottom_margin(1)
