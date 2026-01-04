@@ -3,7 +3,7 @@ use serde::Deserialize;
 // Constants
 pub const LOT_SIZE: f64 = 65.0; // TODO: Make configurable per underlying
 const GRAPH_STEPS: usize = 200;
-const IV_WINDOW_SIGMA: f64 = 3.0; // Number of SDs for graph range
+const IV_WINDOW_SIGMA: f64 = 1.5; // Number of SDs for graph range
 const DEFAULT_VOLATILITY: f64 = 0.05; // Fallback only if IV is 0
 const UNLIMITED_SLOPE_THRESHOLD: f64 = 1e-4; 
 const RISK_FREE_RATE: f64 = 0.0; // Current assumption
@@ -132,29 +132,38 @@ pub fn analyze_strategy(
     positions: &[Position], 
     current_spot: f64, 
     iv: f64, 
-    days_to_expiry: f64
+    days_to_expiry: f64,
+    chain_step: f64
 ) -> StrategyStats {
     if positions.is_empty() {
         return StrategyStats::default();
     }
 
-    // Graph Range (Standard Deviation based)
-    let volatility_range = if iv > 0.0 {
-        current_spot * (iv / 100.0) * (days_to_expiry / 365.0).sqrt() * IV_WINDOW_SIGMA
+    // 1. Calculate Graph Range
+    let (lower_bound, upper_bound) = if positions.is_empty() {
+        // Fallback to Volatility Cone if no positions
+        let volatility_range = if iv > 0.0 {
+            current_spot * (iv / 100.0) * (days_to_expiry / 365.0).sqrt() * IV_WINDOW_SIGMA
+        } else {
+            current_spot * DEFAULT_VOLATILITY
+        };
+        (current_spot - volatility_range, current_spot + volatility_range)
     } else {
-        current_spot * DEFAULT_VOLATILITY
+        // Structure-based Range (N + 3 strikes)
+        let strikes: Vec<f64> = positions.iter().map(|p| p.strike).collect();
+        let min_strike = strikes.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_strike = strikes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        
+        // Use supplied chain step for padding (N + 3 strikes)
+        let padding = 3.0 * chain_step;
+        
+        // Ensure Spot is included.
+        // Bounds: [min_strike - pad, max_strike + pad] expanded to include spot if needed.
+        let l = (min_strike - padding).min(current_spot - chain_step);
+        let u = (max_strike + padding).max(current_spot + chain_step);
+        
+        (l, u)
     };
-    
-    let range_min = current_spot - volatility_range;
-    let range_max = current_spot + volatility_range;
-    
-    // Extend for strikes
-    let strikes: Vec<f64> = positions.iter().map(|p| p.strike).collect();
-    let min_strike = strikes.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max_strike = strikes.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    
-    let lower_bound = range_min.min(min_strike * 0.98);
-    let upper_bound = range_max.max(max_strike * 1.02);
 
     let step_size = (upper_bound - lower_bound) / GRAPH_STEPS as f64;
 

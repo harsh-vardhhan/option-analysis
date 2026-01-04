@@ -33,12 +33,19 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         acc.max(call_oi).max(put_oi)
     });
     
+    // Calculate available width for OI columns
+    // Total width - Fixed columns (20+12+20=52) - Borders (2) - Spacing (4) = 58 overhead
+    let overhead = 58;
+    let available_width = area.width.saturating_sub(overhead) as usize;
+    let max_bar_width = (available_width / 2).max(10); // Ensure at least 10 chars
+
     // Bar drawing helper
     let draw_bar = |val: f64, max: f64, color: Color, grow_left: bool| -> Line {
-        if max == 0.0 { return Line::from("        "); }
-        let width = 8; // Compact fixed width
+        if max == 0.0 { return Line::from(" ".repeat(max_bar_width)); }
+        let width = max_bar_width; 
+        // User request: Highest OI should be 90% of the width
         let ratio = (val / max).min(1.0);
-        let filled = (ratio * width as f64).round() as usize;
+        let filled = (ratio * width as f64 * 0.9).round() as usize; 
         let empty = width - filled;
         
         let bar_char = "▆"; 
@@ -49,12 +56,12 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
              // Grow Left <- (e.g. "   |||")
              vec![
                  Span::raw(empty_str),
-                 Span::styled(bar_str, Style::default().fg(color)),
+                 Span::styled(bar_str, Style::default().fg(color).add_modifier(Modifier::DIM)),
              ]
         } else {
              // Grow Right -> (e.g. "|||   ")
              vec![
-                 Span::styled(bar_str, Style::default().fg(color)),
+                 Span::styled(bar_str, Style::default().fg(color).add_modifier(Modifier::DIM)),
                  Span::raw(empty_str),
              ]
         };
