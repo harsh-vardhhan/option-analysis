@@ -23,7 +23,7 @@ use model::ApiResponse;
 // API Configuration
 const UPSTOX_API_BASE: &str = "https://api.upstox.com/v2/option/chain";
 const INSTRUMENT_KEY: &str = "NSE_INDEX|Nifty 50";
-const EXPIRY_DATE: &str = "2026-01-06";
+// EXPIRY_DATE constant removed; now dynamic.
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -34,33 +34,47 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 2. Get Access Token (TUI Mode)
+    // 2. Setup App Early (to get valid expiry for validation URL)
+    let mut app = App::new();
+    // Default to first available expiry, or a fallback if empty
+    let initial_expiry = app.available_expiries.first().cloned().unwrap_or_else(|| String::from("29 Jan 2026"));
+    
+    // Create channel for expiry updates
+    let (expiry_tx, expiry_rx) = tokio::sync::watch::channel(initial_expiry.clone());
+
+    // 3. Get Access Token (TUI Mode)
     let validation_url = format!(
         "{}?instrument_key={}&expiry_date={}", 
         UPSTOX_API_BASE, 
         urlencoding::encode(INSTRUMENT_KEY), 
-        EXPIRY_DATE
+        initial_expiry
     );
     let setup_result = ui::setup::run_setup_tui(&mut terminal, &validation_url).await?;
 
-    // 3. Setup App and Data Channel
-    let mut app = App::new();
+    // 4. Setup Data Channel
     let (tx, mut rx) = mpsc::channel(10);
 
-    // 4. Background Data Fetcher
+    // 5. Background Data Fetcher
     match setup_result {
         ui::setup::SetupResult::Token(token) => {
             let token_clone = token.clone();
+            // Move receiver into background task
+            let mut expiry_rx_clone = expiry_rx.clone();
+            
             tokio::spawn(async move {
                 let client = reqwest::Client::new();
-                let url = format!(
-                    "{}?instrument_key={}&expiry_date={}", 
-                    UPSTOX_API_BASE, 
-                    urlencoding::encode(INSTRUMENT_KEY), 
-                    EXPIRY_DATE
-                );
                 
                 loop {
+                    // Get current expiry from watch channel
+                    let current_expiry = expiry_rx_clone.borrow_and_update().clone();
+
+                    let url = format!(
+                        "{}?instrument_key={}&expiry_date={}", 
+                        UPSTOX_API_BASE, 
+                        urlencoding::encode(INSTRUMENT_KEY), 
+                        current_expiry
+                    );
+
                     let res = client
                         .get(&url)
                         .header("Content-Type", "application/json")
@@ -96,8 +110,6 @@ async fn main() -> Result<()> {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     // In a real demo we might jitter the prices here, but for now static is fine
                     // or re-generate to simulate slight noise if I added rand.
-                    // Since I didn't add rand, it's static. 
-                    // But sending it again keeps the loop alive and confirms connectivity.
                      let dummy_data = ApiResponse::generate_dummy_data();
                     let _ = tx.send(dummy_data).await;
                 }
@@ -105,7 +117,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // 5. Main Event Loop
+    // 6. Main Event Loop
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = std::time::Instant::now();
 
@@ -129,7 +141,57 @@ async fn main() -> Result<()> {
                         match key.code {
                             KeyCode::Down => app.move_position_row(1),
                             KeyCode::Up => app.move_position_row(-1),
-                            KeyCode::Left | KeyCode::Right => app.move_position_col(),
+                            KeyCode::Left => {
+                                // Try moving position col first (original behavior)
+                                // Only if it doesn't handle it? No, wait. 
+                                // Original request: "switching to past expiries (should not work once it's the first expiry):shift + ←"
+                                // Original Code: `KeyCode::Left | KeyCode::Right => app.move_position_col(),`
+                                // Wait, the original code used Shift+Left/Right to move position COLUMN?
+                                // Let's check `app.move_position_col()`. It toggles Call/Put.
+                                // The User Request says: 
+                                // "switching to future expiries... shift + →"
+                                // "switching to past expiries... shift + ←"
+                                // This CONFLICTS with existing "Move Position" shift+arrow logic if mapped to Left/Right.
+                                // Existing `move_position_col`: toggles between Call/Put column on the SAME row.
+                                // The user explicitly asked for Shift+Arrows for expiry.
+                                // I should probably prioritize the User's NEW request for Shift+Left/Right.
+                                // But wait, how do I move position column then?
+                                // Maybe Shift+Up/Down is enough for row?
+                                // Let's check `move_position_col`. It swaps Call/Put for the *selected position*. 
+                                // Maybe I should remap `move_position_col` or just let Expiry take precedence?
+                                // OR:
+                                // Maybe the user wants Shift+Left/Right for Expiry, and existing Move Position usage needs to change?
+                                // The user said: "switching to future expiries ...: shift + →".
+                                // I will implement Shift+Left/Right for Expiry switching.
+                                // I will REMOVE the `move_position_col` binding from Shift+Left/Right.
+                                // To Keep `move_position_col` accessible, maybe I just map it to something else? 
+                                // Actually `move_position_col` toggles `selected_column`.
+                                // Let's see... `app.move_position_col()` is used to *move the selection* or *move the position*?
+                                // It seems `move_position_col` does `toggle_column` AND updates position kind.
+                                // If I assign Shift+Left/Right to Expiry, I lose the ability to "Flip" a position from Call to Put using keyboard.
+                                // That seems acceptable if not mentioned, or I can map it to something else.
+                                // But wait, standard navigation (no shift) uses Left/Right for `toggle_column`.
+                                // Shift+Left/Right was `move_position_col`.
+                                // I will overwrite it.
+                                
+                                if app.previous_expiry() {
+                                    // Send update
+                                    if let Some(exp) = app.available_expiries.get(app.current_expiry_index) {
+                                        let _ = expiry_tx.send(exp.clone());
+                                        // Clear data potentially to avoid showing stale data for wrong expiry?
+                                        // Better to let next fetch handle it.
+                                        app.data.clear(); 
+                                    }
+                                }
+                            },
+                            KeyCode::Right => { 
+                                if app.next_expiry() {
+                                    if let Some(exp) = app.available_expiries.get(app.current_expiry_index) {
+                                        let _ = expiry_tx.send(exp.clone());
+                                        app.data.clear();
+                                    }
+                                }
+                            },
                             KeyCode::Char('S') | KeyCode::Char('s') => app.toggle_help(),
                             _ => {}
                         }

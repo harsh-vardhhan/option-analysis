@@ -14,11 +14,19 @@ use crate::app::App;
 // Redefining to match the calling pattern in mod.rs
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let spot_price = app.data.first().map(|d| d.underlying_spot_price).unwrap_or(0.0);
-    // Assuming underlying key has the name, e.g., "NSE_INDEX|Nifty 50"
     let underlying = app.data.first()
         .map(|d| d.underlying_key.split('|').last().unwrap_or(&d.underlying_key))
         .unwrap_or("NIFTY");
-    let expiry = app.data.first().map(|d| d.expiry.as_str()).unwrap_or("-");
+    
+    // Use selected expiry from App state
+    let expiry_display = if let Some(exp) = app.available_expiries.get(app.current_expiry_index) {
+        // Add arrows to indicate switchability
+        let left_arrow = if app.current_expiry_index > 0 { "< " } else { "  " };
+        let right_arrow = if app.current_expiry_index < app.available_expiries.len() - 1 { " >" } else { "  " };
+        format!("{}{}{}", left_arrow, exp, right_arrow)
+    } else {
+        String::from("-")
+    };
 
     let dashboard_text = vec![
         Line::from(vec![
@@ -26,7 +34,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             Span::raw(" "),
             Span::styled(format!(" {:.2} ", spot_price), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::raw("  Expiry: "),
-            Span::styled(expiry, Style::default().fg(Color::Yellow)),
+            Span::styled(expiry_display, Style::default().fg(Color::Yellow)),
             Span::raw("  |  Last Action: "),
             Span::styled(format!(" {} ", app.last_message), Style::default().bg(Color::DarkGray).fg(Color::White)),
         ]),

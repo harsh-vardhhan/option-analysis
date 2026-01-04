@@ -35,10 +35,39 @@ pub struct App {
     // Multi-select
     // Using String for strike to avoid float key issues: format!("{:.2}", strike)
     pub selected_positions: HashSet<(String, OptionType)>,
+
+    // Expiry Management
+    pub available_expiries: Vec<String>,
+    pub current_expiry_index: usize,
 }
 
 impl App {
     pub fn new() -> App {
+        let all_expiries = vec![
+            "06 Jan 2026", "13 Jan 2026", "20 Jan 2026", "27 Jan 2026",
+            "03 Feb 2026", "24 Feb 2026", "30 Mar 2026", "30 Jun 2026",
+            "29 Sep 2026", "29 Dec 2026"
+        ];
+
+        // Filter expiries: Keep only those >= today
+        // Note: In a real app we'd use Local::now().date_naive(), but for this specific request 
+        // regarding the provided list and "2026", we'll just implement the logic.
+        // The user prompt says "once the expiry date is behind the current date, don't show it anymore".
+        let today = chrono::Local::now().date_naive();
+        let available_expiries: Vec<String> = all_expiries.into_iter()
+            .filter_map(|date_str| {
+                // Parse date "06 Jan 2026". Format: "%d %b %Y"
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%d %b %Y") {
+                     if date >= today {
+                         return Some(date.format("%Y-%m-%d").to_string());
+                     }
+                }
+                None
+            })
+            .collect();
+        
+        let initial_expiry_index = 0; // Default to first available (nearest future)
+
         App {
             data: Vec::new(),
             selected_row: 0,
@@ -54,6 +83,9 @@ impl App {
             strategies: crate::strategy::Strategy::all().to_vec(),
             selected_strategy: 0,
             selected_positions: HashSet::new(),
+            
+            available_expiries,
+            current_expiry_index: initial_expiry_index,
         }
     }
 
@@ -365,5 +397,23 @@ impl App {
         }
         // Always apply on interaction
         self.apply_strategy();
+    }
+
+    pub fn next_expiry(&mut self) -> bool {
+        if self.available_expiries.is_empty() { return false; }
+        if self.current_expiry_index < self.available_expiries.len() - 1 {
+            self.current_expiry_index += 1;
+            return true; // value changed
+        }
+        false
+    }
+    
+    pub fn previous_expiry(&mut self) -> bool {
+         if self.available_expiries.is_empty() { return false; }
+         if self.current_expiry_index > 0 {
+             self.current_expiry_index -= 1;
+             return true; // value changed
+         }
+         false
     }
 }
