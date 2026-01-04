@@ -175,7 +175,7 @@ mod tests {
         // Prob(x > Z) = 1 - 0.63 = 0.37.
         // So PoP should be around 37%.
         
-        let stats = analyze_strategy(&positions, 100.0, 20.0, 365.0);
+        let stats = analyze_strategy(&positions, 100.0, 20.0, 365.0, 5.0);
         
         println!("PoP: {}", stats.pop);
         // Using broad range to allow for slight drift/calc diffs
