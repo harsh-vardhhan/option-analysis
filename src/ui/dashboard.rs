@@ -15,7 +15,7 @@ use crate::app::App;
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let spot_price = app.data.first().map(|d| d.underlying_spot_price).unwrap_or(0.0);
     let underlying = app.data.first()
-        .map(|d| d.underlying_key.split('|').last().unwrap_or(&d.underlying_key))
+        .map(|d| d.underlying_key.split('|').next_back().unwrap_or(&d.underlying_key))
         .unwrap_or("NIFTY");
     
     // Use selected expiry from App state

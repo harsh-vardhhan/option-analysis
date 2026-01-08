@@ -385,8 +385,10 @@ impl App {
                 let put_iv = row.put_options.as_ref().and_then(|o| o.option_greeks.as_ref()).map(|g| g.iv).unwrap_or(0.0);
                 if call_iv > 0.0 && put_iv > 0.0 {
                     (call_iv + put_iv) / 2.0
+                } else if call_iv > 0.0 {
+                    call_iv
                 } else {
-                    if call_iv > 0.0 { call_iv } else { put_iv }
+                    put_iv
                 }
             } else {
                 0.0

@@ -13,7 +13,6 @@ impl Portfolio {
     }
 
     pub fn trade(&mut self, strike: f64, kind: OptionType, price: f64, is_buy: bool) -> String {
-        let message: String;
         let side = if is_buy { "BUY" } else { "SELL" };
         let k_str = match kind {
             OptionType::Call => "CE",
@@ -31,16 +30,14 @@ impl Portfolio {
                     let old_total = pos.entry_price * (pos.qty - 1) as f64;
                     pos.entry_price = (old_total + price) / pos.qty as f64;
                 }
+            } else if pos.qty > 0 {
+                pos.qty = -1;
+                pos.entry_price = price;
             } else {
-                if pos.qty > 0 {
-                    pos.qty = -1;
-                    pos.entry_price = price;
-                } else {
-                    pos.qty -= 1;
-                    let old_qty_abs = (pos.qty + 1).abs() as f64;
-                    let old_total = pos.entry_price * old_qty_abs;
-                    pos.entry_price = (old_total + price) / pos.qty.abs() as f64;
-                }
+                pos.qty -= 1;
+                let old_qty_abs = (pos.qty + 1).abs() as f64;
+                let old_total = pos.entry_price * old_qty_abs;
+                pos.entry_price = (old_total + price) / pos.qty.abs() as f64;
             }
         } else {
             // New Position
@@ -55,8 +52,7 @@ impl Portfolio {
         // Cleanup: Remove 0 qty
         self.positions.retain(|p| p.qty != 0);
 
-        message = format!("{} {} {} @ {:.2}", side, k_str, strike, price);
-        message
+        format!("{} {} {} @ {:.2}", side, k_str, strike, price)
     }
 
     pub fn remove(&mut self, strike: f64, kind: OptionType) {

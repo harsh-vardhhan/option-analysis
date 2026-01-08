@@ -133,12 +133,10 @@ pub async fn run_setup_tui(
                         // But status 200 is usually enough for auth check.
                         // Ideally we check if it returns proper JSON, but let's assume 200 means auth worked.
                         break; 
+                    } else if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+                         error_msg = "Invalid Access Token".to_string();
                     } else {
-                        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-                             error_msg = "Invalid Access Token".to_string();
-                        } else {
-                             error_msg = format!("API Error: {}", response.status());
-                        }
+                         error_msg = format!("API Error: {}", response.status());
                     }
                 },
                 Err(e) => {

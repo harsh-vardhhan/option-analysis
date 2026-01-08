@@ -198,11 +198,11 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     .header(
         Row::new(vec![
             Cell::from(Line::from("OI").alignment(Alignment::Left)).style(Style::default().fg(Color::Green)),
-            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Green.clone())), // slightly simpler color
+            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Green)), // slightly simpler color
             Cell::from(Line::from("CALLS").alignment(Alignment::Right)).style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("STRIKE").alignment(Alignment::Center)).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Cell::from(Line::from("PUTS").alignment(Alignment::Left)).style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Red.clone())),
+            Cell::from(Line::from("Delta").alignment(Alignment::Center)).style(Style::default().fg(Color::Red)),
             Cell::from(Line::from("OI").alignment(Alignment::Right)).style(Style::default().fg(Color::Red)),
         ])
         .bottom_margin(1)
