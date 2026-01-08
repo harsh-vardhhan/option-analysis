@@ -274,19 +274,8 @@ impl App {
         let mut temp_selection_updates: Vec<(String, OptionType, String)> = Vec::new(); // (old_key_strike, kind, new_key_strike)
 
         for (pos_idx, new_strike, new_price) in changes {
-            // If we have potential merges, it gets complicated (e.g. moving a leg ONTO another leg).
-            // Simplification: Just update the properties. If it overlaps, `handle_trade_action` logic or a cleanup pass might be needed.
-            // But here we are modifying IN PLACE.
-            // If we move pos A to strike X, and there is already pos B at strike X...
-            // Implementing merge logic here is complex. 
-            // For now, let's just update field. "Merge" usually happens on 'Add', but here we are mutating.
-            // If we end up with 2 positions same strike same kind, the renderer will sum them or show duplicates?
-            // Renderer finds "first". `table.rs`: `app.positions.iter().find(...)`. It only shows the first one!
-            // So we MUST merge or ensure uniqueness.
-            
-            // Actually, let's keep it simple: Just update. The user can see duplicates in "Strategies" list (if we had one).
-            // But `table.rs` only shows one.
-            // Let's defer strict merging for now. It's an edge case (moving a spread leg onto another leg).
+            // Update position details
+            // Note: Merging logic simplified for now; duplicates accepted visually if they occur.
             
             let pos = &mut self.portfolio.positions[pos_idx];
             let old_strike_key = format!("{:.2}", pos.strike);
@@ -311,7 +300,7 @@ impl App {
         }
     }
 
-    // move_position_col removed as it is no longer bound to any key.
+
 
 
     pub fn apply_strategy(&mut self) {
@@ -368,5 +357,63 @@ impl App {
              return true; // value changed
          }
          false
+    }
+
+    pub fn calculate_strategy_stats(&self) -> crate::strategy::StrategyStats {
+        use chrono::{NaiveDate, Local};
+        
+        // Helper to get spot price for Strategy Analysis
+        let spot_price = self.data.first().map(|d| d.underlying_spot_price).unwrap_or(0.0);
+        
+        // Calculate Days to Expiry
+        let expiry_str = self.data.first().map(|d| d.expiry.as_str()).unwrap_or("");
+        let days_to_expiry = if let Ok(expiry_date) = NaiveDate::parse_from_str(expiry_str, "%Y-%m-%d") {
+            let today = Local::now().date_naive();
+            (expiry_date - today).num_days().max(1) as f64 // at least 1 day to avoid div/0
+        } else {
+            1.0
+        };
+
+        // Find ATM IV (Average of Call/Put IV at closest strike)
+        let atm_iv = if !self.data.is_empty() {
+             let closest = self.data.iter().min_by(|a, b| {
+                (a.strike_price - spot_price).abs().partial_cmp(&(b.strike_price - spot_price).abs()).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            
+            if let Some(row) = closest {
+                let call_iv = row.call_options.as_ref().and_then(|o| o.option_greeks.as_ref()).map(|g| g.iv).unwrap_or(0.0);
+                let put_iv = row.put_options.as_ref().and_then(|o| o.option_greeks.as_ref()).map(|g| g.iv).unwrap_or(0.0);
+                if call_iv > 0.0 && put_iv > 0.0 {
+                    (call_iv + put_iv) / 2.0
+                } else {
+                    if call_iv > 0.0 { call_iv } else { put_iv }
+                }
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        // Calculate Chain Step
+        let chain_step = if self.data.len() > 1 {
+            let mut strikes: Vec<f64> = self.data.iter().map(|d| d.strike_price).collect();
+            strikes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            strikes.dedup();
+            
+            let mut min_diff = f64::INFINITY;
+            for window in strikes.windows(2) {
+                let diff = (window[1] - window[0]).abs();
+                if diff < min_diff && diff > 1.0 {
+                    min_diff = diff;
+                }
+            }
+            if min_diff != f64::INFINITY { min_diff } else { 50.0 }
+        } else {
+            50.0
+        };
+
+        use crate::strategy::analyze_strategy;
+        analyze_strategy(&self.portfolio.positions, spot_price, atm_iv, days_to_expiry, chain_step)
     }
 }

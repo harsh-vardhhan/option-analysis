@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 // Constants
-pub const LOT_SIZE: f64 = 65.0; // TODO: Make configurable per underlying
+pub const LOT_SIZE: f64 = 65.0;
 const GRAPH_STEPS: usize = 200;
 const IV_WINDOW_SIGMA: f64 = 1.5; // Number of SDs for graph range
 const DEFAULT_VOLATILITY: f64 = 0.05; // Fallback only if IV is 0

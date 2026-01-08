@@ -142,44 +142,10 @@ async fn main() -> Result<()> {
                             KeyCode::Down => app.move_position_row(1),
                             KeyCode::Up => app.move_position_row(-1),
                             KeyCode::Left => {
-                                // Try moving position col first (original behavior)
-                                // Only if it doesn't handle it? No, wait. 
-                                // Original request: "switching to past expiries (should not work once it's the first expiry):shift + ←"
-                                // Original Code: `KeyCode::Left | KeyCode::Right => app.move_position_col(),`
-                                // Wait, the original code used Shift+Left/Right to move position COLUMN?
-                                // Let's check `app.move_position_col()`. It toggles Call/Put.
-                                // The User Request says: 
-                                // "switching to future expiries... shift + →"
-                                // "switching to past expiries... shift + ←"
-                                // This CONFLICTS with existing "Move Position" shift+arrow logic if mapped to Left/Right.
-                                // Existing `move_position_col`: toggles between Call/Put column on the SAME row.
-                                // The user explicitly asked for Shift+Arrows for expiry.
-                                // I should probably prioritize the User's NEW request for Shift+Left/Right.
-                                // But wait, how do I move position column then?
-                                // Maybe Shift+Up/Down is enough for row?
-                                // Let's check `move_position_col`. It swaps Call/Put for the *selected position*. 
-                                // Maybe I should remap `move_position_col` or just let Expiry take precedence?
-                                // OR:
-                                // Maybe the user wants Shift+Left/Right for Expiry, and existing Move Position usage needs to change?
-                                // The user said: "switching to future expiries ...: shift + →".
-                                // I will implement Shift+Left/Right for Expiry switching.
-                                // I will REMOVE the `move_position_col` binding from Shift+Left/Right.
-                                // To Keep `move_position_col` accessible, maybe I just map it to something else? 
-                                // Actually `move_position_col` toggles `selected_column`.
-                                // Let's see... `app.move_position_col()` is used to *move the selection* or *move the position*?
-                                // It seems `move_position_col` does `toggle_column` AND updates position kind.
-                                // If I assign Shift+Left/Right to Expiry, I lose the ability to "Flip" a position from Call to Put using keyboard.
-                                // That seems acceptable if not mentioned, or I can map it to something else.
-                                // But wait, standard navigation (no shift) uses Left/Right for `toggle_column`.
-                                // Shift+Left/Right was `move_position_col`.
-                                // I will overwrite it.
-                                
+                                // Switch to previous expiry
                                 if app.previous_expiry() {
-                                    // Send update
                                     if let Some(exp) = app.available_expiries.get(app.current_expiry_index) {
                                         let _ = expiry_tx.send(exp.clone());
-                                        // Clear data potentially to avoid showing stale data for wrong expiry?
-                                        // Better to let next fetch handle it.
                                         app.data.clear(); 
                                     }
                                 }
