@@ -29,9 +29,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // --- DASHBOARD ---
     dashboard::draw(f, app, chunks[0]);
 
-    if app.data.is_empty() {
-        return;
-    }
+
 
     // --- MIDDLE SECTION (Table + Strategies) ---
     // Split chunks[1] into Table (80%) and Strategies (20%)

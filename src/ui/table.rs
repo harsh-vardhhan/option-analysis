@@ -9,9 +9,7 @@ use ratatui::{
 use crate::app::{App, ColumnSelection};
 
 pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
-    if app.data.is_empty() {
-        return;
-    }
+
 
     let spot_price = app.data.first().map(|d| d.underlying_spot_price).unwrap_or(0.0);
 
