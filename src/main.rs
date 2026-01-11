@@ -45,18 +45,24 @@ async fn main() -> Result<()> {
     let setup_result = ui::setup::run_setup_tui(&mut tui.terminal, &validation_url).await?;
 
     // 4. Setup Data Channel
+    // We now use TuiMessage to support both options data and quotes
     let (tx, rx) = mpsc::channel(10);
+    // Channel for TUI to request quotes (string instrument key)
+    let (quote_request_tx, mut quote_request_rx) = mpsc::channel::<String>(50);
 
     // 5. Background Data Fetcher
     match setup_result {
         ui::setup::SetupResult::Token(token) => {
             let token_clone = token.clone();
             let mut expiry_rx_clone = expiry_rx.clone();
+            let main_tx = tx.clone(); 
             
+            // TASK A: Option Chain Polling
             tokio::spawn(async move {
                 let client = reqwest::Client::new();
                 
                 loop {
+                    // Get current expiry from watch channel
                     let current_expiry = expiry_rx_clone.borrow_and_update().clone();
 
                     let url = format!(
@@ -78,7 +84,7 @@ async fn main() -> Result<()> {
                         Ok(response) => {
                             if let Ok(api_response) = response.json::<ApiResponse>().await {
                                 if !api_response.data.is_empty() {
-                                    let _ = tx.send(api_response.data).await;
+                                    let _ = main_tx.send(tui::TuiMessage::OptionChain(api_response.data)).await;
                                 }
                             }
                         }
@@ -89,24 +95,68 @@ async fn main() -> Result<()> {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             });
+
+            // TASK B: Quote Fetcher (Lazy/Debounced)
+            let token_quote = token.clone();
+            let quote_result_tx = tx.clone();
+            
+            tokio::spawn(async move {
+                let client = reqwest::Client::new();
+                
+                // Simple approach: Process requests as they come.
+                // Since this runs in a loop, it naturally serializes.
+                while let Some(instr_key) = quote_request_rx.recv().await {
+                    let url = format!("https://api.upstox.com/v2/market-quote/quotes?instrument_key={}", instr_key);
+                    
+                    let res = client.get(&url)
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .header("Authorization", format!("Bearer {}", token_quote))
+                        .send()
+                        .await;
+
+                    if let Ok(response) = res {
+                        // Deserialize into map
+                         if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
+                             // The API returns a map "NSE_EQ|..." -> Data
+                             // We just grab the one we asked for (or the first one)
+                             if let Some(data) = quote_res.data.values().next() {
+                                 let _ = quote_result_tx.send(tui::TuiMessage::Quote(data.clone())).await;
+                             }
+                         }
+                    }
+                    // Rate limiting? Upstox is pretty generous.
+                }
+            });
         },
         ui::setup::SetupResult::Demo => {
+            // Demo loops
+            let demo_tx = tx.clone();
             tokio::spawn(async move {
                 // Send initial data
                 let dummy_data = ApiResponse::generate_dummy_data();
-                let _ = tx.send(dummy_data).await;
+                let _ = demo_tx.send(tui::TuiMessage::OptionChain(dummy_data)).await;
                 
                 loop {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     let dummy_data = ApiResponse::generate_dummy_data();
-                    let _ = tx.send(dummy_data).await;
+                    let _ = demo_tx.send(tui::TuiMessage::OptionChain(dummy_data)).await;
+                }
+            });
+
+            // Demo Quote
+            let demo_quote_tx = tx.clone();
+            tokio::spawn(async move {
+                while let Some(_key) = quote_request_rx.recv().await {
+                     let dummy_quote = model::QuoteData::dummy();
+                     let _ = demo_quote_tx.send(tui::TuiMessage::Quote(dummy_quote)).await;
                 }
             });
         }
     }
 
     // 6. Run the Event Loop
-    tui.run(&mut app, rx, expiry_tx).await?;
+    tui.run(&mut app, rx, expiry_tx, quote_request_tx).await?;
 
     Ok(())
 }
