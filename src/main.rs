@@ -96,36 +96,66 @@ async fn main() -> Result<()> {
                 }
             });
 
-            // TASK B: Quote Fetcher (Lazy/Debounced)
+            // TASK B: Quote Fetcher (Auto-Refresh)
             let token_quote = token.clone();
             let quote_result_tx = tx.clone();
             
             tokio::spawn(async move {
                 let client = reqwest::Client::new();
-                
-                // Simple approach: Process requests as they come.
-                // Since this runs in a loop, it naturally serializes.
-                while let Some(instr_key) = quote_request_rx.recv().await {
-                    let url = format!("https://api.upstox.com/v2/market-quote/quotes?instrument_key={}", instr_key);
-                    
-                    let res = client.get(&url)
-                        .header("Content-Type", "application/json")
-                        .header("Accept", "application/json")
-                        .header("Authorization", format!("Bearer {}", token_quote))
-                        .send()
-                        .await;
+                let mut current_key: Option<String> = None;
+                // Periodic timer
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                // Set missed tick behavior to skip, to avoid burst fetches
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-                    if let Ok(response) = res {
-                        // Deserialize into map
-                         if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
-                             // The API returns a map "NSE_EQ|..." -> Data
-                             // We just grab the one we asked for (or the first one)
-                             if let Some(data) = quote_res.data.values().next() {
-                                 let _ = quote_result_tx.send(tui::TuiMessage::Quote(data.clone())).await;
+                loop {
+                    tokio::select! {
+                        // 1. Handle New Instrument Selection (High Priority)
+                        res = quote_request_rx.recv() => {
+                            match res {
+                                Some(new_key) => {
+                                    current_key = Some(new_key);
+                                    // Fetch immediately on new selection
+                                    if let Some(instr_key) = &current_key {
+                                        let url = format!("https://api.upstox.com/v2/market-quote/quotes?instrument_key={}", instr_key);
+                                        if let Ok(response) = client.get(&url)
+                                            .header("Content-Type", "application/json")
+                                            .header("Accept", "application/json")
+                                            .header("Authorization", format!("Bearer {}", token_quote))
+                                            .send().await 
+                                        {
+                                            if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
+                                                if let Some(data) = quote_res.data.values().next() {
+                                                    let _ = quote_result_tx.send(tui::TuiMessage::Quote(data.clone())).await;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Reset timer so we don't double-fetch immediately
+                                    interval.reset();
+                                },
+                                None => break, // Channel closed
+                            }
+                        }
+                        // 2. Periodic Refresh
+                        _ = interval.tick() => {
+                             if let Some(instr_key) = &current_key {
+                                let url = format!("https://api.upstox.com/v2/market-quote/quotes?instrument_key={}", instr_key);
+                                if let Ok(response) = client.get(&url)
+                                    .header("Content-Type", "application/json")
+                                    .header("Accept", "application/json")
+                                    .header("Authorization", format!("Bearer {}", token_quote))
+                                    .send().await 
+                                {
+                                    if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
+                                        if let Some(data) = quote_res.data.values().next() {
+                                            let _ = quote_result_tx.send(tui::TuiMessage::Quote(data.clone())).await;
+                                        }
+                                    }
+                                }
                              }
-                         }
+                        }
                     }
-                    // Rate limiting? Upstox is pretty generous.
                 }
             });
         },
@@ -144,12 +174,33 @@ async fn main() -> Result<()> {
                 }
             });
 
-            // Demo Quote
+            // Demo Quote (Auto-Refresh)
             let demo_quote_tx = tx.clone();
             tokio::spawn(async move {
-                while let Some(_key) = quote_request_rx.recv().await {
-                     let dummy_quote = model::QuoteData::dummy();
-                     let _ = demo_quote_tx.send(tui::TuiMessage::Quote(dummy_quote)).await;
+                let mut current_key: Option<String> = None;
+                let mut interval = tokio::time::interval(Duration::from_secs(1));
+                
+                loop {
+                    tokio::select! {
+                        res = quote_request_rx.recv() => {
+                             match res {
+                                Some(k) => {
+                                    current_key = Some(k);
+                                    // Immediate update
+                                    let dummy_quote = model::QuoteData::dummy();
+                                    let _ = demo_quote_tx.send(tui::TuiMessage::Quote(dummy_quote)).await;
+                                    interval.reset();
+                                },
+                                None => break,
+                             }
+                        }
+                        _ = interval.tick() => {
+                            if current_key.is_some() {
+                                let dummy_quote = model::QuoteData::dummy();
+                                let _ = demo_quote_tx.send(tui::TuiMessage::Quote(dummy_quote)).await;
+                            }
+                        }
+                    }
                 }
             });
         }

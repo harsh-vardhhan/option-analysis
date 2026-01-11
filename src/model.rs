@@ -49,12 +49,14 @@ pub struct MarketData {
 // --- Market Quote API Models ---
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct MarketQuoteResponse {
     pub status: String,
     pub data: HashMap<String, QuoteData>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct QuoteData {
     pub instrument_token: String,
     pub symbol: String,
@@ -74,6 +76,7 @@ pub struct Depth {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct DepthEntry {
     pub quantity: i32,
     pub price: f64,
@@ -81,6 +84,7 @@ pub struct DepthEntry {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct Ohlc {
     pub open: f64,
     pub high: f64,
