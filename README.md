@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Trakbit Demo](https://d3t10td51m5gef.cloudfront.net/demo.gif)
+![Trakbit Demo](https://d3t10td51m5gef.cloudfront.net/demo.gif?v=1)
 
 [![v1.0.0 Stable Release](https://img.shields.io/badge/version-v1.0.0-green.svg)](https://github.com/yourusername/trakbit/releases)
 
