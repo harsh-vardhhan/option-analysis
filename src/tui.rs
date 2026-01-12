@@ -173,6 +173,10 @@ impl Tui {
                         if app.selected_row >= app.data.len() {
                             app.selected_row = app.data.len().saturating_sub(1);
                         }
+
+                        if let Some(instr_key) = app.get_selected_instrument_key() {
+                            let _ = quote_tx.send(instr_key).await;
+                        }
                     },
                     TuiMessage::Quote(quote_data) => {
                         app.market_depth = Some(quote_data);
