@@ -6,6 +6,7 @@ pub mod help;
 pub mod strategies;
 pub mod setup;
 pub mod utils;
+pub mod bid_ask; // [NEW]
 
 pub use utils::{centered_rect, format_indian_currency};
 
@@ -31,18 +32,27 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
 
 
-    // --- MIDDLE SECTION (Table + Strategies) ---
-    // Split chunks[1] into Table (80%) and Strategies (20%)
+    // --- MIDDLE SECTION (Table + Strategies + BidAsk) ---
+    // Split chunks[1] into Table (75%) and Right Panel (25%)
     let middle_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(chunks[1]);
 
     // --- TABLE ---
     table::draw(f, app, middle_chunks[0]);
     
-    // --- STRATEGIES ---
-    strategies::draw(f, app, middle_chunks[1]);
+    // --- RIGHT PANEL (Strategies + BidAsk) ---
+    // Split right panel (middle_chunks[1]) vertically: 60% Strategies, 40% BidAsk
+    let right_panel_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(middle_chunks[1]);
+
+    // Strategies
+    strategies::draw(f, app, right_panel_chunks[0]);
+    // Bid/Ask
+    bid_ask::draw(f, app, right_panel_chunks[1]);
 
     // --- STRATEGY PANEL ---
     if chunks.len() > 2 {

@@ -39,9 +39,23 @@ pub struct App {
     // Expiry Management
     pub available_expiries: Vec<String>,
     pub current_expiry_index: usize,
+    
+    // Bid/Ask Depth
+    pub market_depth: Option<crate::model::QuoteData>,
 }
 
 impl App {
+    pub fn get_selected_instrument_key(&self) -> Option<String> {
+        if self.data.is_empty() { return None; }
+        if self.selected_row >= self.data.len() { return None; }
+        
+        let item = &self.data[self.selected_row];
+        match self.selected_column {
+            ColumnSelection::Call => item.call_options.as_ref().map(|o| o.instrument_key.clone()),
+            ColumnSelection::Put => item.put_options.as_ref().map(|o| o.instrument_key.clone()),
+        }
+    }
+
     pub fn new() -> App {
         let all_expiries = vec![
             "06 Jan 2026", "13 Jan 2026", "20 Jan 2026", "27 Jan 2026",
@@ -86,6 +100,7 @@ impl App {
             
             available_expiries,
             current_expiry_index: initial_expiry_index,
+            market_depth: None,
         }
     }
 
