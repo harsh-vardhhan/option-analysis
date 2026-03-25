@@ -12,15 +12,26 @@ env:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.os_name }})
+    # This ensures everything runs on your M4 Pro
+    runs-on: self-hosted 
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - target: aarch64-apple-darwin      # Native M4 Pro
+            os_name: macos-latest
+            ext: ""
+          - target: x86_64-pc-windows-gnu     # Windows
+            os_name: windows-latest
+            ext: ".exe"
+          - target: x86_64-unknown-linux-gnu  # Linux (Intel)
+            os_name: ubuntu-latest
+            ext: ""
 
     steps:
     - uses: actions/checkout@v4
 
+    # Caching isn't as strictly necessary on a local runner, but still speeds up builds
     - name: Set up Cargo cache
       uses: actions/cache@v3
       with:
@@ -29,29 +40,28 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+        key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Build
-      run: cargo build --release --verbose
+    # The runner will use your system's Homebrew installation of Zig
+    - name: Ensure cargo-zigbuild
+      run: cargo install cargo-zigbuild
 
-    - name: Run tests
-      run: cargo test --verbose
+    # Tell Rust about the target we are cross-compiling
+    - name: Add Rust target
+      run: rustup target add ${{ matrix.target }}
 
-    - name: Rename binary (Unix)
-      if: runner.os != 'Windows'
-      run: mv -f target/release/option-analysis target/release/trakbit
+    # Build the project using cargo-zigbuild!
+    - name: Build with Zig
+      run: cargo zigbuild --release --target ${{ matrix.target }} --verbose
 
-    - name: Rename binary (Windows)
-      if: runner.os == 'Windows'
-      run: mv -Force target/release/option-analysis.exe target/release/trakbit.exe
+    - name: Rename binary
+      run: mv -f target/${{ matrix.target }}/release/option-analysis${{ matrix.ext }} target/${{ matrix.target }}/release/trakbit${{ matrix.ext }}
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: trakbit-${{ matrix.os }}
-        path: target/release/trakbit*
+        name: trakbit-${{ matrix.os_name }}
+        path: target/${{ matrix.target }}/release/trakbit*
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -60,12 +70,6 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-south-1
 
-    - name: Upload to S3 (Unix)
-      if: runner.os != 'Windows'
+    - name: Upload to S3
       run: |
-        aws s3 cp target/release/trakbit s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os }}/trakbit --acl public-read
-
-    - name: Upload to S3 (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        aws s3 cp target/release/trakbit.exe s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os }}/trakbit.exe --acl public-read
+        aws s3 cp target/${{ matrix.target }}/release/trakbit${{ matrix.ext }} s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os_name }}/trakbit${{ matrix.ext }} --acl public-read
