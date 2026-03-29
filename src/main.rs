@@ -41,8 +41,13 @@ async fn main() -> Result<()> {
         initial_expiry
     );
     
-    // Pass the terminal instance from our Tui wrapper
-    let setup_result = ui::setup::run_setup_tui(&mut tui.terminal, &validation_url).await?;
+    // Check if we have a locally saved valid token first
+    let setup_result = if let Some(token) = ui::setup::load_and_validate_token(&validation_url).await {
+        ui::setup::SetupResult::Token(token)
+    } else {
+        // Fall back to TUI if no valid token is found
+        ui::setup::run_setup_tui(&mut tui.terminal, &validation_url).await?
+    };
 
     // 4. Setup Data Channel
     // We now use TuiMessage to support both options data and quotes

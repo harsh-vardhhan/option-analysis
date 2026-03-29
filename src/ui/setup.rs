@@ -34,9 +34,9 @@ pub async fn run_setup_tui(
             let chunks = ratatui::layout::Layout::default()
                 .direction(ratatui::layout::Direction::Vertical)
                 .constraints([
-                    ratatui::layout::Constraint::Length(4), // Welcome
-                    ratatui::layout::Constraint::Length(4), // Link
-                    ratatui::layout::Constraint::Length(4), // Steps
+                    ratatui::layout::Constraint::Length(5), // Welcome
+                    ratatui::layout::Constraint::Length(3), // Link
+                    ratatui::layout::Constraint::Length(3), // Steps
                     ratatui::layout::Constraint::Length(3), // Input
                     ratatui::layout::Constraint::Length(2), // Demo info
                     ratatui::layout::Constraint::Min(2),    // Error/Status
@@ -49,17 +49,18 @@ pub async fn run_setup_tui(
 
             let welcome = ratatui::widgets::Paragraph::new(vec![
                 ratatui::text::Line::from(ratatui::text::Span::styled("Welcome to Trakbit!", ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD).fg(ratatui::style::Color::Magenta))),
-                ratatui::text::Line::from("To get started, you need an Upstox Access Token."),
+                ratatui::text::Line::from("To get started, you need an Upstox Analytics Token."),
+                ratatui::text::Line::from(ratatui::text::Span::styled("(Valid for 1 year = no daily token generation!)", ratatui::style::Style::default().fg(ratatui::style::Color::Green))),
             ]).alignment(ratatui::layout::Alignment::Center);
 
             let link_text = vec![
                 ratatui::text::Line::from("1. Go to:"),
-                ratatui::text::Line::from(ratatui::text::Span::styled("https://account.upstox.com/developer/apps", ratatui::style::Style::default().fg(ratatui::style::Color::Blue).add_modifier(ratatui::style::Modifier::UNDERLINED))),
+                ratatui::text::Line::from(ratatui::text::Span::styled("https://account.upstox.com/developer/apps#analytics", ratatui::style::Style::default().fg(ratatui::style::Color::Blue).add_modifier(ratatui::style::Modifier::UNDERLINED))),
             ];
             let link = ratatui::widgets::Paragraph::new(link_text).alignment(ratatui::layout::Alignment::Center);
 
             let steps_text = vec![
-                ratatui::text::Line::from("2. Create a new app (or use existing)"),
+                ratatui::text::Line::from("2. Generate a new Analytics token"),
                 ratatui::text::Line::from("3. Copy 'Access Token' and paste below"),
             ];
             let steps = ratatui::widgets::Paragraph::new(steps_text).alignment(ratatui::layout::Alignment::Center);
@@ -200,5 +201,37 @@ pub async fn run_setup_tui(
         }
     }
 
-    Ok(SetupResult::Token(token.trim().to_string()))
+    let final_token = token.trim().to_string();
+    crate::ui::setup::save_token(&final_token);
+    Ok(SetupResult::Token(final_token))
+}
+
+pub async fn load_and_validate_token(validation_url: &str) -> Option<String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let path = format!("{}/.trakbit_token", home);
+    
+    if let Ok(saved_token) = std::fs::read_to_string(&path) {
+        let saved_token = saved_token.trim().to_string();
+        if !saved_token.is_empty() {
+            let client = reqwest::Client::new();
+            if let Ok(res) = client.get(validation_url)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("Authorization", format!("Bearer {}", saved_token))
+                .send()
+                .await 
+            {
+                if res.status().is_success() {
+                    return Some(saved_token);
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn save_token(token: &str) {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let path = format!("{}/.trakbit_token", home);
+    let _ = std::fs::write(&path, token.trim());
 }
