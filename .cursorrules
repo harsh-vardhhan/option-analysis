@@ -1,0 +1,9 @@
+# General AI Agent Instructions
+1. Always run `cargo check` after modifications to ensure that the code compiles.
+2. Only write project files in the main directory context, nowhere else unless instructed.
+3. Keep UI modifications visually distinct, clear, and performant according to modern terminal standards using `ratatui`.
+
+# Git & Workflow Constraints
+1. **Branch Protection:** NEVER commit code directly to the `master` or `main` branches under any circumstances.
+2. **Feature Branching:** Before making file changes, always checkout a new descriptively named branch: e.g., `git checkout -b <feature-name>`.
+3. **Pull Requests:** Always plan for pushing feature branches to remote via `git push origin <feature-name>` for Pull Requests, honoring the required branch checks.
