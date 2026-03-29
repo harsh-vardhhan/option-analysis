@@ -77,3 +77,11 @@ jobs:
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       run: |
         aws s3 cp target/${{ matrix.target }}/release/trakbit${{ matrix.ext }} s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os_name }}/trakbit${{ matrix.ext }} --acl public-read
+
+  # This job satisfies the required status check in your branch ruleset
+  pull_request:
+    name: pull_request
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All matrix builds passed successfully!"
