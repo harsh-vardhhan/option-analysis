@@ -56,6 +56,7 @@ jobs:
       run: cargo build --release --target ${{ matrix.target }} --verbose
 
     - name: Rename binary
+      shell: bash
       run: mv -f target/${{ matrix.target }}/release/option-analysis${{ matrix.ext }} target/${{ matrix.target }}/release/trakbit${{ matrix.ext }}
 
     - name: Upload Artifact
