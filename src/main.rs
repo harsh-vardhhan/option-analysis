@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
             });
 
             // TASK B: Quote Fetcher (Auto-Refresh)
-            let token_quote = token.clone();
+            let token_quote = token;
             let quote_result_tx = tx.clone();
 
             tokio::spawn(async move {

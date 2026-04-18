@@ -261,7 +261,7 @@ pub fn analyze_strategy(
         let mut sorted_points = breakevens.clone();
         sorted_points.push(0.0); // Start
         sorted_points.push(f64::INFINITY); // End
-        sorted_points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_points.sort_by(|a, b| a.total_cmp(b));
         sorted_points.dedup();
 
         for window in sorted_points.windows(2) {

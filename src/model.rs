@@ -96,7 +96,10 @@ impl ApiResponse {
     pub fn generate_dummy_data() -> Vec<OptionData> {
         let json_data = include_str!("demo_data.json");
         let response: ApiResponse =
-            serde_json::from_str(json_data).expect("Failed to parse demo data");
+            serde_json::from_str(json_data).unwrap_or_else(|_| ApiResponse {
+                status: "success".to_string(),
+                data: Vec::new(),
+            });
         response.data
     }
 }

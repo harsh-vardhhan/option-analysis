@@ -499,7 +499,7 @@ impl App {
         // Calculate Chain Step
         let chain_step = if self.data.len() > 1 {
             let mut strikes: Vec<f64> = self.data.iter().map(|d| d.strike_price).collect();
-            strikes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            strikes.sort_by(|a, b| a.total_cmp(b));
             strikes.dedup();
 
             let mut min_diff = f64::INFINITY;
