@@ -3,14 +3,14 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 mod app;
-mod model;
-mod ui;
-mod strategy;
-mod strategy_builder;
-mod portfolio;
-mod tui;
 #[cfg(test)]
 mod app_tests;
+mod model;
+mod portfolio;
+mod strategy;
+mod strategy_builder;
+mod tui;
+mod ui;
 
 use app::App;
 use model::ApiResponse;
@@ -28,26 +28,31 @@ async fn main() -> Result<()> {
     // 2. Setup App
     let mut app = App::new();
     // Default to first available expiry, or a fallback if empty
-    let initial_expiry = app.available_expiries.first().cloned().unwrap_or_else(|| String::from("29 Jan 2026"));
-    
+    let initial_expiry = app
+        .available_expiries
+        .first()
+        .cloned()
+        .unwrap_or_else(|| String::from("29 Jan 2026"));
+
     // Create channel for expiry updates
     let (expiry_tx, expiry_rx) = tokio::sync::watch::channel(initial_expiry.clone());
 
     // 3. Get Access Token (TUI Mode)
     let validation_url = format!(
-        "{}?instrument_key={}&expiry_date={}", 
-        UPSTOX_API_BASE, 
-        urlencoding::encode(INSTRUMENT_KEY), 
+        "{}?instrument_key={}&expiry_date={}",
+        UPSTOX_API_BASE,
+        urlencoding::encode(INSTRUMENT_KEY),
         initial_expiry
     );
-    
+
     // Check if we have a locally saved valid token first
-    let setup_result = if let Some(token) = ui::setup::load_and_validate_token(&validation_url).await {
-        ui::setup::SetupResult::Token(token)
-    } else {
-        // Fall back to TUI if no valid token is found
-        ui::setup::run_setup_tui(&mut tui.terminal, &validation_url).await?
-    };
+    let setup_result =
+        if let Some(token) = ui::setup::load_and_validate_token(&validation_url).await {
+            ui::setup::SetupResult::Token(token)
+        } else {
+            // Fall back to TUI if no valid token is found
+            ui::setup::run_setup_tui(&mut tui.terminal, &validation_url).await?
+        };
 
     // 4. Setup Data Channel
     // We now use TuiMessage to support both options data and quotes
@@ -60,20 +65,20 @@ async fn main() -> Result<()> {
         ui::setup::SetupResult::Token(token) => {
             let token_clone = token.clone();
             let mut expiry_rx_clone = expiry_rx.clone();
-            let main_tx = tx.clone(); 
-            
+            let main_tx = tx.clone();
+
             // TASK A: Option Chain Polling
             tokio::spawn(async move {
                 let client = reqwest::Client::new();
-                
+
                 loop {
                     // Get current expiry from watch channel
                     let current_expiry = expiry_rx_clone.borrow_and_update().clone();
 
                     let url = format!(
-                        "{}?instrument_key={}&expiry_date={}", 
-                        UPSTOX_API_BASE, 
-                        urlencoding::encode(INSTRUMENT_KEY), 
+                        "{}?instrument_key={}&expiry_date={}",
+                        UPSTOX_API_BASE,
+                        urlencoding::encode(INSTRUMENT_KEY),
                         current_expiry
                     );
 
@@ -84,17 +89,19 @@ async fn main() -> Result<()> {
                         .header("Authorization", format!("Bearer {}", token_clone))
                         .send()
                         .await;
-        
+
                     match res {
                         Ok(response) => {
                             if let Ok(api_response) = response.json::<ApiResponse>().await {
                                 if !api_response.data.is_empty() {
-                                    let _ = main_tx.send(tui::TuiMessage::OptionChain(api_response.data)).await;
+                                    let _ = main_tx
+                                        .send(tui::TuiMessage::OptionChain(api_response.data))
+                                        .await;
                                 }
                             }
                         }
                         Err(e) => {
-                             eprintln!("Error fetching data: {}", e);
+                            eprintln!("Error fetching data: {}", e);
                         }
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -102,9 +109,9 @@ async fn main() -> Result<()> {
             });
 
             // TASK B: Quote Fetcher (Auto-Refresh)
-            let token_quote = token.clone();
+            let token_quote = token;
             let quote_result_tx = tx.clone();
-            
+
             tokio::spawn(async move {
                 let client = reqwest::Client::new();
                 let mut current_key: Option<String> = None;
@@ -127,7 +134,7 @@ async fn main() -> Result<()> {
                                             .header("Content-Type", "application/json")
                                             .header("Accept", "application/json")
                                             .header("Authorization", format!("Bearer {}", token_quote))
-                                            .send().await 
+                                            .send().await
                                         {
                                             if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
                                                 if let Some(data) = quote_res.data.values().next() {
@@ -150,7 +157,7 @@ async fn main() -> Result<()> {
                                     .header("Content-Type", "application/json")
                                     .header("Accept", "application/json")
                                     .header("Authorization", format!("Bearer {}", token_quote))
-                                    .send().await 
+                                    .send().await
                                 {
                                     if let Ok(quote_res) = response.json::<model::MarketQuoteResponse>().await {
                                         if let Some(data) = quote_res.data.values().next() {
@@ -163,7 +170,7 @@ async fn main() -> Result<()> {
                     }
                 }
             });
-        },
+        }
         ui::setup::SetupResult::Demo => {
             // Demo loops
             let demo_tx = tx.clone();
@@ -171,7 +178,7 @@ async fn main() -> Result<()> {
                 // Send initial data
                 let dummy_data = ApiResponse::generate_dummy_data();
                 let _ = demo_tx.send(tui::TuiMessage::OptionChain(dummy_data)).await;
-                
+
                 loop {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     let dummy_data = ApiResponse::generate_dummy_data();
@@ -184,7 +191,7 @@ async fn main() -> Result<()> {
             tokio::spawn(async move {
                 let mut current_key: Option<String> = None;
                 let mut interval = tokio::time::interval(Duration::from_secs(1));
-                
+
                 loop {
                     tokio::select! {
                         res = quote_request_rx.recv() => {

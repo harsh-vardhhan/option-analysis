@@ -1,5 +1,5 @@
-use crate::strategy::{Position, OptionType};
 use crate::model::OptionData;
+use crate::strategy::{OptionType, Position};
 
 pub struct Portfolio {
     pub positions: Vec<Position>,
@@ -19,12 +19,16 @@ impl Portfolio {
             OptionType::Put => "PE",
         };
 
-        if let Some(pos) = self.positions.iter_mut().find(|p| (p.strike - strike).abs() < 0.01 && p.kind == kind) {
-             // Flip logic or increment
-             if is_buy {
+        if let Some(pos) = self
+            .positions
+            .iter_mut()
+            .find(|p| (p.strike - strike).abs() < 0.01 && p.kind == kind)
+        {
+            // Flip logic or increment
+            if is_buy {
                 if pos.qty < 0 {
-                     pos.qty = 1;
-                     pos.entry_price = price;
+                    pos.qty = 1;
+                    pos.entry_price = price;
                 } else {
                     pos.qty += 1;
                     let old_total = pos.entry_price * (pos.qty - 1) as f64;
@@ -56,13 +60,17 @@ impl Portfolio {
     }
 
     pub fn remove(&mut self, strike: f64, kind: OptionType) {
-        self.positions.retain(|p| !((p.strike - strike).abs() < 0.01 && p.kind == kind));
+        self.positions
+            .retain(|p| !((p.strike - strike).abs() < 0.01 && p.kind == kind));
     }
 
     pub fn update_prices(&mut self, data: &[OptionData]) {
         for pos in &mut self.positions {
             // Find current market price for this position
-            if let Some(market_row) = data.iter().find(|d| (d.strike_price - pos.strike).abs() < 0.1) {
+            if let Some(market_row) = data
+                .iter()
+                .find(|d| (d.strike_price - pos.strike).abs() < 0.1)
+            {
                 let current_ltp = match pos.kind {
                     OptionType::Call => market_row.call_options.as_ref().map(|o| o.market_data.ltp),
                     OptionType::Put => market_row.put_options.as_ref().map(|o| o.market_data.ltp),
@@ -75,5 +83,3 @@ impl Portfolio {
         }
     }
 }
-
-

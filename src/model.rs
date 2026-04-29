@@ -95,7 +95,11 @@ pub struct Ohlc {
 impl ApiResponse {
     pub fn generate_dummy_data() -> Vec<OptionData> {
         let json_data = include_str!("demo_data.json");
-        let response: ApiResponse = serde_json::from_str(json_data).expect("Failed to parse demo data");
+        let response: ApiResponse =
+            serde_json::from_str(json_data).unwrap_or_else(|_| ApiResponse {
+                status: "success".to_string(),
+                data: Vec::new(),
+            });
         response.data
     }
 }
@@ -109,21 +113,66 @@ impl QuoteData {
             last_price: 100.0,
             depth: Depth {
                 buy: vec![
-                    DepthEntry { quantity: 100, price: 99.5, orders: 5 },
-                    DepthEntry { quantity: 200, price: 99.0, orders: 3 },
-                    DepthEntry { quantity: 150, price: 98.5, orders: 2 },
-                    DepthEntry { quantity: 50, price: 98.0, orders: 1 },
-                    DepthEntry { quantity: 20, price: 97.5, orders: 1 },
+                    DepthEntry {
+                        quantity: 100,
+                        price: 99.5,
+                        orders: 5,
+                    },
+                    DepthEntry {
+                        quantity: 200,
+                        price: 99.0,
+                        orders: 3,
+                    },
+                    DepthEntry {
+                        quantity: 150,
+                        price: 98.5,
+                        orders: 2,
+                    },
+                    DepthEntry {
+                        quantity: 50,
+                        price: 98.0,
+                        orders: 1,
+                    },
+                    DepthEntry {
+                        quantity: 20,
+                        price: 97.5,
+                        orders: 1,
+                    },
                 ],
                 sell: vec![
-                    DepthEntry { quantity: 80, price: 100.5, orders: 4 },
-                    DepthEntry { quantity: 120, price: 101.0, orders: 6 },
-                    DepthEntry { quantity: 90, price: 101.5, orders: 2 },
-                    DepthEntry { quantity: 40, price: 102.0, orders: 1 },
-                    DepthEntry { quantity: 10, price: 102.5, orders: 1 },
-                ]
+                    DepthEntry {
+                        quantity: 80,
+                        price: 100.5,
+                        orders: 4,
+                    },
+                    DepthEntry {
+                        quantity: 120,
+                        price: 101.0,
+                        orders: 6,
+                    },
+                    DepthEntry {
+                        quantity: 90,
+                        price: 101.5,
+                        orders: 2,
+                    },
+                    DepthEntry {
+                        quantity: 40,
+                        price: 102.0,
+                        orders: 1,
+                    },
+                    DepthEntry {
+                        quantity: 10,
+                        price: 102.5,
+                        orders: 1,
+                    },
+                ],
             },
-            ohlc: Ohlc { open: 100.0, high: 102.0, low: 98.0, close: 100.0 },
+            ohlc: Ohlc {
+                open: 100.0,
+                high: 102.0,
+                low: 98.0,
+                close: 100.0,
+            },
             volume: 1000,
             oi: 50000.0,
         }
@@ -198,6 +247,13 @@ mod tests {
         }
         "#;
         let response: ApiResponse = serde_json::from_str(json_data).expect("Failed to deserialize");
-        assert_eq!(response.data[0].call_options.as_ref().unwrap().instrument_key, "NSE_FO|51059");
+        assert_eq!(
+            response.data[0]
+                .call_options
+                .as_ref()
+                .unwrap()
+                .instrument_key,
+            "NSE_FO|51059"
+        );
     }
 }

@@ -7,3 +7,6 @@
 1. **Branch Protection:** NEVER commit code directly to the `master` or `main` branches under any circumstances.
 2. **Feature Branching:** Before making file changes, always checkout a new descriptively named branch: e.g., `git checkout -b <feature-name>`.
 3. **Pull Requests:** Always plan for pushing feature branches to remote via `git push origin <feature-name>` for Pull Requests, honoring the required branch checks.
+
+# Agent Skills
+1. **Rust Best Practices:** Follow the Apollo GraphQL Rust Best Practices when writing or reviewing Rust code. Read `.cursor/rules/rust-best-practices/SKILL.md` and its references before applying any changes to Rust code.

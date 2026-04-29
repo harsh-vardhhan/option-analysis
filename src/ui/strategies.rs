@@ -1,17 +1,16 @@
+use crate::app::{App, Focus};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
 };
-use crate::app::{App, Focus};
 
 pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
-    let items: Vec<ListItem> = app.strategies
+    let items: Vec<ListItem> = app
+        .strategies
         .iter()
-        .map(|s| {
-            ListItem::new(s.as_str()).style(Style::default().fg(Color::White))
-        })
+        .map(|s| ListItem::new(s.as_str()).style(Style::default().fg(Color::White)))
         .collect();
 
     // Determine Border Color based on Focus
@@ -22,14 +21,19 @@ pub fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let items = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(" Strategies ").border_style(Style::default().fg(border_color)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Strategies ")
+                .border_style(Style::default().fg(border_color)),
+        )
         .highlight_style(
             Style::default()
                 .bg(Color::White)
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         );
-        
+
     // We need a ListState to render selected item
     let mut state = ListState::default();
     state.select(Some(app.selected_strategy));
