@@ -30,9 +30,9 @@ Available for all major platforms.
 
 | Platform | Download | Note |
 | :--- | :--- | :--- |
-| **macOS** | [Download Binary](https://trakbit-releases.s3.ap-south-1.amazonaws.com/builds/macos-latest/trakbit) | Requires `chmod +x` |
-| **Linux** | [Download Binary](https://trakbit-releases.s3.ap-south-1.amazonaws.com/builds/ubuntu-latest/trakbit) | Requires `chmod +x` |
-| **Windows** | [Download Installer](https://trakbit-releases.s3.ap-south-1.amazonaws.com/builds/windows-latest/trakbit.exe) | `.exe` installer |
+| **macOS** | [Download Binary](https://github.com/harsh-vardhhan/option-analysis/releases/latest/download/trakbit-macos) | Requires `chmod +x` |
+| **Linux** | [Download Binary](https://github.com/harsh-vardhhan/option-analysis/releases/latest/download/trakbit-linux) | Requires `chmod +x` |
+| **Windows** | [Download Installer](https://github.com/harsh-vardhhan/option-analysis/releases/latest/download/trakbit.exe) | `.exe` installer |
 
 ## Installation / Prerequisite
 

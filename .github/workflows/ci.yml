@@ -65,18 +65,57 @@ jobs:
         name: trakbit-${{ matrix.os_name }}
         path: target/${{ matrix.target }}/release/trakbit*
 
-    - name: Configure AWS Credentials
-      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-south-1
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Upload to S3
-      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-      run: |
-        aws s3 cp target/${{ matrix.target }}/release/trakbit${{ matrix.ext }} s3://${{ secrets.S3_BUCKET_NAME }}/builds/${{ matrix.os_name }}/trakbit${{ matrix.ext }} --acl public-read
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare assets
+        run: |
+          mkdir -p release-assets
+          # From macos-latest artifact, rename trakbit to trakbit-macos
+          cp artifacts/trakbit-macos-latest/trakbit release-assets/trakbit-macos
+          # From ubuntu-latest artifact, rename trakbit to trakbit-linux
+          cp artifacts/trakbit-ubuntu-latest/trakbit release-assets/trakbit-linux
+          # From windows-latest artifact, copy trakbit.exe
+          cp artifacts/trakbit-windows-latest/trakbit.exe release-assets/trakbit.exe
+          ls -la release-assets
+
+      - name: Update latest tag
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git tag -f latest
+          git push --force origin latest
+
+      - name: Create or Update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Release"
+          body: "Automated release of the latest build from the master branch."
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            release-assets/trakbit-macos
+            release-assets/trakbit-linux
+            release-assets/trakbit.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # This job satisfies the required status check in your branch ruleset
   pull_request:
